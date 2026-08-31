@@ -137,6 +137,21 @@ var Auth = (function() {
         return false;
     }
 
+    // === Auto-link user to seed data ===
+    function autoLinkUser() {
+        return fetch(CONFIG.REST + '/rpc/auto_link_user', {
+            method: 'POST',
+            headers: Object.assign({
+                'Content-Type': 'application/json'
+            }, headers())
+        }).then(function(r) {
+            if (!r.ok) throw new Error('auto_link_user failed: ' + r.status);
+            return r.json();
+        }).catch(function(err) {
+            console.warn('auto_link_user failed (non-critical):', err);
+        });
+    }
+
     // === Public API ===
     return {
         getSession: getSession,
@@ -152,6 +167,7 @@ var Auth = (function() {
         loadProfile: loadProfile,
         createUserProfile: createUserProfile,
         requireAuth: requireAuth,
-        redirectIfLoggedIn: redirectIfLoggedIn
+        redirectIfLoggedIn: redirectIfLoggedIn,
+        autoLinkUser: autoLinkUser
     };
 })();

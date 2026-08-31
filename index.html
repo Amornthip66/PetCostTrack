@@ -20,37 +20,7 @@
 <body class="text-gray-800 antialiased">
 
     <!-- ====== NAV BAR ====== -->
-    <nav class="bg-white shadow-sm sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0 flex items-center text-pet-DEFAULT">
-                        <i class="fa-solid fa-paw text-2xl mr-2"></i>
-                        <span class="font-bold text-xl tracking-wide">PetCostTrack</span>
-                    </div>
-                    <div class="hidden sm:ml-8 sm:flex sm:space-x-8">
-                        <a href="index.html" class="border-pet-DEFAULT text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">แดชบอร์ด</a>
-                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">สัตว์เลี้ยงของฉัน</a>
-                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ประวัติรายจ่าย</a>
-                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">การแจ้งเตือน <span class="ml-1 bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">1</span></a>
-                    </div>
-                </div>
-                <div class="hidden sm:ml-6 sm:flex sm:items-center gap-3">
-                    <div class="text-right mr-2">
-                        <div id="navUserName" class="text-sm font-medium text-gray-700"></div>
-                        <div id="navUserRole" class="text-xs text-gray-500"></div>
-                    </div>
-                    <img id="navAvatar" class="h-10 w-10 rounded-full object-cover border-2 border-pet-DEFAULT" alt="Avatar">
-                    <button onclick="Auth.logout().then(function(){window.location.href='login.html'})" class="ml-2 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ออกจากระบบ">
-                        <i class="fa-solid fa-right-from-bracket"></i>
-                    </button>
-                </div>
-                <div class="flex items-center sm:hidden">
-                    <button onclick="Auth.logout().then(function(){window.location.href='login.html'})" class="p-2 text-gray-400 hover:text-red-500"><i class="fa-solid fa-right-from-bracket"></i></button>
-                </div>
-            </div>
-        </div>
-    </nav>
+    <div id="mainNav"></div>
 
     <!-- ====== MAIN CONTENT ====== -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -183,6 +153,7 @@
     <script src="js/config.env.js"></script>
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
     <script src="js/dashboard.js"></script>
     <script>
         // === Auth Callback: จัดการ redirect จาก Supabase ===
@@ -221,14 +192,9 @@
 
         // === Init: ตรวจสอบ auth แล้วโหลดข้อมูล ===
         (function() {
-            if (!Auth.requireAuth()) return; // redirect ไป login.html ถ้ายังไม่ login
+            if (!UI.initPage('dashboard')) return;
 
             Auth.loadProfile().then(function(user) {
-                // อัปเดต nav bar
-                document.getElementById('navUserName').textContent = user.name;
-                document.getElementById('navUserRole').textContent = user.role;
-                document.getElementById('navAvatar').src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name) + '&background=0ea5e9&color=fff';
-
                 // ตั้งค่าวันที่ปัจจุบันในฟอร์ม
                 var today = new Date();
                 var dateInput = document.getElementById('formDate');

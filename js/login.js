@@ -73,17 +73,28 @@
 
         Auth.signup(email, password)
         .then(function(data) {
-            if (data.error) {
-                showError('signupError', data.error_description || data.error);
+            // Supabase ใช้ error / code / message สำหรับ error หลายรูปแบบ
+            if (data.error || data.code || data.message) {
+                var errMsg = data.error_description || data.error || data.message || 'เกิดข้อผิดพลาด';
+                showError('signupError', errMsg);
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }
             Auth.saveSession(data);
-            return Auth.createUserProfile(name, email, role, data.user.id);
+            // กรณี confirm email แล้ว data.user อาจไม่มี
+            var userId = data.user && data.user.id ? data.user.id : null;
+            if (!userId) {
+                document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน';
+                document.getElementById('signupSuccess').classList.remove('hidden');
+                setLoading('signupBtn', false, 'สมัครสมาชิก');
+                return;
+            }
+            return Auth.createUserProfile(name, email, role, userId);
         })
         .then(function(result) {
+            if (!result) return; // email confirmation flow — ไม่ต้องทำอะไรเพิ่ม
             if (result && result.error) {
-                showError('signupError', result.message);
+                showError('signupError', result.message || result.error);
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }

@@ -194,7 +194,10 @@
         (function() {
             if (!UI.initPage('dashboard')) return;
 
-            Auth.loadProfile().then(function(user) {
+            // Auto-link user กับ seed data ก่อนโหลด profile
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function(user) {
                 // ตั้งค่าวันที่ปัจจุบันในฟอร์ม
                 var today = new Date();
                 var dateInput = document.getElementById('formDate');

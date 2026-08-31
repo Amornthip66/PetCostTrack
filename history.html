@@ -107,7 +107,9 @@
     <script>
         (function() {
             if (!UI.initPage('history')) return;
-            Auth.loadProfile().then(function() { History.init(); });
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function() { History.init(); });
         })();
     </script>
 </body>

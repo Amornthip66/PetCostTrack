@@ -69,7 +69,10 @@
             
             Auth.saveSession(data);
             console.log('Session saved:', Auth.getSession()); // Debug
-            window.location.href = 'index.html';
+            // Auto-link กับ seed data ก่อนเข้า dashboard
+            Auth.autoLinkUser().then(function() {
+                window.location.href = 'index.html';
+            });
         }).catch(function(err) {
             console.error('Login error:', err);
             showError('loginError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
@@ -121,11 +124,22 @@
                 return;
             }
             
-            // สร้าง user profile ใน DB
-            return Auth.createUserProfile(name, email, role, userId);
+            // Auto-link กับ seed data (trigger อาจทำงานแล้ว)
+            return Auth.autoLinkUser().then(function() {
+                // ลองเช็คว่า profile มีอยู่แล้วหรือยัง
+                return Auth.loadProfile().then(function() {
+                    // profile มีอยู่แล้ว (trigger link สำเร็จ)
+                    document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กำลังเข้าสู่ระบบ...';
+                    document.getElementById('signupSuccess').classList.remove('hidden');
+                    setTimeout(function() { window.location.href = 'index.html'; }, 1000);
+                }).catch(function() {
+                    // ยังไม่มี profile → สร้างใหม่
+                    return Auth.createUserProfile(name, email, role, userId);
+                });
+            });
         })
         .then(function(result) {
-            if (!result) return; // email confirmation flow
+            if (!result) return; // email confirmation flow or existing profile
             
             if (result && (result.error || result.code)) {
                 var profileErr = result.message || result.error || 'ไม่สามารถสร้าง profile ได้';

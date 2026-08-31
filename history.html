@@ -109,7 +109,10 @@
             if (!UI.initPage('history')) return;
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { History.init(); });
+            }).then(function() { History.init(); })
+            .catch(function(err) {
+                console.error('History page init error:', err);
+            });
         })();
     </script>
 </body>

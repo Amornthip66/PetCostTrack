@@ -73,7 +73,10 @@
             if (!UI.initPage('profile')) return;
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { Profile.init(); });
+            }).then(function() { Profile.init(); })
+            .catch(function(err) {
+                console.error('Profile page init error:', err);
+            });
         })();
     </script>
 </body>

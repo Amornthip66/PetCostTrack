@@ -66,7 +66,10 @@
             if (!UI.initPage('budgets')) return;
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { Budgets.init(); });
+            }).then(function() { Budgets.init(); })
+            .catch(function(err) {
+                console.error('Budgets page init error:', err);
+            });
         })();
     </script>
 </body>

@@ -146,7 +146,12 @@ var Auth = (function() {
             }, headers())
         }).then(function(r) {
             if (!r.ok) throw new Error('auto_link_user failed: ' + r.status);
-            return r.json();
+            // auto_link_user returns VOID — response body is empty
+            var ct = r.headers.get('content-type') || '';
+            if (ct.indexOf('application/json') >= 0) {
+                return r.json();
+            }
+            return null;
         }).catch(function(err) {
             console.warn('auto_link_user failed (non-critical):', err);
         });

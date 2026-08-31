@@ -12,13 +12,24 @@ var Pets = (function() {
 
     function load() {
         var user = Auth.getUser();
-        return Api.query('pet_access', 'select=pet_id,access_role,pets(pet_id,name,type_breed,age)&user_id=eq.' + user.user_id)
+        // Query pet_access first, then pets separately to avoid embedded resource RLS 403
+        return Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + user.user_id)
         .then(function(access) {
-            _pets = (access || []).map(function(a) {
-                var p = a.pets || {};
-                return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: a.access_role };
+            if (!access || !access.length) {
+                _pets = [];
+                render();
+                return;
+            }
+            var petIds = access.map(function(a) { return a.pet_id; });
+            var accessMap = {};
+            access.forEach(function(a) { accessMap[a.pet_id] = a.access_role; });
+            return Api.query('pets', 'select=pet_id,name,type_breed,age&pet_id=in.(' + petIds.join(',') + ')')
+            .then(function(pets) {
+                _pets = (pets || []).map(function(p) {
+                    return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: accessMap[p.pet_id] };
+                });
+                render();
             });
-            render();
         });
     }
 

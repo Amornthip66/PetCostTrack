@@ -73,7 +73,9 @@
     <script>
         (function() {
             if (!UI.initPage('pets')) return;
-            Auth.loadProfile().then(function() { Pets.init(); });
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function() { Pets.init(); });
         })();
     </script>
 </body>

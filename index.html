@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PetCostTrack - แดชบอร์ดสรุปค่าใช้จ่าย</title>
+    
+    <!-- ฟอนต์ภาษาไทย Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome สำหรับไอคอน -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js สำหรับวาดกราฟ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // ตั้งค่า Tailwind ให้ใช้ฟอนต์ Prompt และกำหนดสีหลัก (Brand Colors)
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        pet: {
+                            light: '#e0f2fe',
+                            DEFAULT: '#0ea5e9', // Sky Blue
+                            dark: '#0369a1',
+                            hidden: '#ef4444', // Red for hidden costs
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8fafc; }
+        /* ซ่อน Scrollbar แต่ยังเลื่อนได้ สำหรับส่วนรายการ */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <!-- โลโก้ และ ชื่อแอป -->
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center text-pet-DEFAULT">
+                        <i class="fa-solid fa-paw text-2xl mr-2"></i>
+                        <span class="font-bold text-xl tracking-wide">PetCostTrack</span>
+                    </div>
+                    <!-- เมนู Desktop -->
+                    <div class="hidden sm:ml-8 sm:flex sm:space-x-8">
+                        <a href="#" class="border-pet-DEFAULT text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">แดชบอร์ด</a>
+                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">สัตว์เลี้ยงของฉัน</a>
+                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ประวัติรายจ่าย</a>
+                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            การแจ้งเตือน
+                            <span class="ml-1 bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">1</span>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- โปรไฟล์ผู้ใช้ & บทบาท -->
+                <div class="hidden sm:ml-6 sm:flex sm:items-center">
+                    <div class="relative ml-3 text-right mr-3">
+                        <div class="text-sm font-medium text-gray-700">คุณปานชนก (Owner)</div>
+                        <div class="text-xs text-gray-500">จัดการโดย กลุ่ม 39</div>
+                    </div>
+                    <img class="h-10 w-10 rounded-full object-cover border-2 border-pet-DEFAULT" src="https://ui-avatars.com/api/?name=Panchanok&background=0ea5e9&color=fff" alt="User Avatar">
+                </div>
+
+                <!-- ปุ่มเมนูมือถือ -->
+                <div class="flex items-center sm:hidden">
+                    <button type="button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100" aria-controls="mobile-menu" aria-expanded="false">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        
+        <!-- Header & Action -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">ภาพรวมค่าใช้จ่าย</h1>
+                <p class="text-sm text-gray-500 mt-1">ประจำเดือน: <span class="font-semibold text-gray-700">สิงหาคม 2569</span></p>
+            </div>
+            <!-- ปุ่มเพิ่มรายจ่าย (Scenario: จ่ายเงินสดที่คลินิก ถ่ายรูปใบเสร็จ) -->
+            <button onclick="openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-pet-DEFAULT hover:bg-pet-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pet-DEFAULT transition-colors">
+                <i class="fa-solid fa-plus mr-2"></i> เพิ่มรายจ่ายใหม่
+            </button>
+        </div>
+
+        <!-- สรุปตัวเลข (KPI Cards) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <!-- Card 1: รวมค่าใช้จ่ายทั้งหมด -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-pet-DEFAULT">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">ยอดรวมเดือนนี้</p>
+                        <p class="text-3xl font-bold text-gray-900 mt-1">฿ 4,850</p>
+                    </div>
+                    <div class="p-3 bg-pet-light rounded-full text-pet-DEFAULT">
+                        <i class="fa-solid fa-wallet text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-pet-DEFAULT h-2 rounded-full" style="width: 48.5%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">ใช้งบไปแล้ว 48.5% จากงบที่ตั้งไว้ (฿ 10,000)</p>
+                </div>
+            </div>
+
+            <!-- Card 2: ค่าใช้จ่ายแฝง (จุดเด่นของระบบ) -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-pet-hidden">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">ยอด <span class="text-pet-hidden font-semibold">ค่าใช้จ่ายแฝง</span></p>
+                        <p class="text-3xl font-bold text-pet-hidden mt-1">฿ 2,300</p>
+                    </div>
+                    <div class="p-3 bg-red-100 rounded-full text-pet-hidden">
+                        <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-4 flex items-center">
+                    <i class="fa-solid fa-arrow-trend-up text-red-500 mr-1"></i> สูงกว่าเดือนที่แล้ว 15%
+                </p>
+            </div>
+
+            <!-- Card 3: สัตว์เลี้ยงที่ดูแล -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-amber-400">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">จำนวนสัตว์เลี้ยง (ตัว)</p>
+                        <p class="text-3xl font-bold text-gray-900 mt-1">2</p>
+                    </div>
+                    <div class="p-3 bg-amber-100 rounded-full text-amber-500">
+                        <i class="fa-solid fa-dog text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex -space-x-2 overflow-hidden">
+                    <img class="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?ixlib=rb-1.2.1&auto=format&fit=crop&w=64&q=80" alt="Dog 1">
+                    <img class="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-1.2.1&auto=format&fit=crop&w=64&q=80" alt="Cat 1">
+                </div>
+            </div>
+        </div>
+
+        <!-- กราฟและรายการล่าสุด -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- ส่วนกราฟ (สัดส่วนค่าใช้จ่าย) -->
+            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">สัดส่วนค่าใช้จ่าย</h3>
+                <div class="relative h-64 w-full flex justify-center">
+                    <canvas id="expenseChart"></canvas>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-400 mr-2"></span> ค่าอาหาร</div>
+                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-red-400 mr-2"></span> รักษา (แฝง)</div>
+                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-green-400 mr-2"></span> ของใช้ปกติ</div>
+                    <div class="flex items-center"><span class="w-3 h-3 rounded-full bg-orange-400 mr-2"></span> สิ่งของพัง (แฝง)</div>
+                </div>
+            </div>
+
+            <!-- ส่วนรายการล่าสุด -->
+            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 border border-gray-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">รายการล่าสุด</h3>
+                    <a href="#" class="text-sm text-pet-DEFAULT hover:underline">ดูทั้งหมด</a>
+                </div>
+                
+                <div class="overflow-hidden">
+                    <ul class="divide-y divide-gray-100">
+                        <!-- รายการที่ 1 (Scenario: สุนัขกินของเล่น - ค่าใช้จ่ายแฝงฉุกเฉิน) -->
+                        <li class="py-4 hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2 flex justify-between items-center cursor-pointer">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-shrink-0 w-12 h-12 bg-red-100 text-pet-hidden rounded-full flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-stethoscope"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                        ผ่าตัดฉุกเฉิน (สุนัขกินของเล่น)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-pet-hidden">
+                                            ค่าใช้จ่ายแฝง
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">28 ส.ค. 2569 • คลินิกสัตว์รักษ์ดี</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-gray-900">฿ 2,000</p>
+                                <!-- ไอคอนรูปใบเสร็จ (Cloud Storage Requirement) -->
+                                <span class="text-xs text-blue-500 flex items-center justify-end mt-1" title="มีไฟล์ใบเสร็จแนบ">
+                                    <i class="fa-solid fa-receipt mr-1"></i> ดูใบเสร็จ
+                                </span>
+                            </div>
+                        </li>
+
+                        <!-- รายการที่ 2 (ค่าใช้จ่ายปกติ) -->
+                        <li class="py-4 hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2 flex justify-between items-center cursor-pointer">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-shrink-0 w-12 h-12 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-bowl-food"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                        อาหารสุนัข Royal Canin 10kg
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                            ปกติ
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">15 ส.ค. 2569 • Pet Shop Online</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-gray-900">฿ 1,500</p>
+                            </div>
+                        </li>
+
+                        <!-- รายการที่ 3 (ค่าใช้จ่ายปกติ) -->
+                        <li class="py-4 hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2 flex justify-between items-center cursor-pointer">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-shrink-0 w-12 h-12 bg-green-100 text-green-500 rounded-full flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-syringe"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                        ฉีดวัคซีนรวมประจำปี (แมว)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                            ปกติ (ตามรอบ)
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">10 ส.ค. 2569 • โรงพยาบาลสัตว์ม.พะเยา</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-gray-900">฿ 800</p>
+                                <span class="text-xs text-blue-500 flex items-center justify-end mt-1" title="มีไฟล์ใบเสร็จแนบ">
+                                    <i class="fa-solid fa-receipt mr-1"></i> ดูใบเสร็จ
+                                </span>
+                            </div>
+                        </li>
+                        
+                        <!-- รายการที่ 4 (ค่าใช้จ่ายแฝง - ของพัง) -->
+                        <li class="py-4 hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2 flex justify-between items-center cursor-pointer border-b-0">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-shrink-0 w-12 h-12 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-couch"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                        ซื้อสายชาร์จใหม่ (แมวกัดขาด)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-pet-hidden">
+                                            ค่าใช้จ่ายแฝง
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">02 ส.ค. 2569 • ร้านสะดวกซื้อ</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-gray-900">฿ 300</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal เพิ่มรายจ่าย (Add Expense Modal) -->
+    <div id="expenseModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            
+            <!-- Background overlay -->
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <!-- Modal Panel -->
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-pet-light sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fa-solid fa-wallet text-pet-DEFAULT text-xl"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                บันทึกรายจ่ายใหม่
+                            </h3>
+                            <div class="mt-4 space-y-4">
+                                <!-- ฟอร์มรับข้อมูล -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">หมวดหมู่ <span class="text-red-500">*</span></label>
+                                    <select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 bg-gray-50 focus:outline-none focus:ring-pet-DEFAULT focus:border-pet-DEFAULT sm:text-sm rounded-md border">
+                                        <optgroup label="รายจ่ายปกติ">
+                                            <option>ค่าอาหาร</option>
+                                            <option>ค่าวัคซีน/ตรวจสุขภาพตามรอบ</option>
+                                            <option>ของใช้ทั่วไป (ทรายแมว, แชมพู)</option>
+                                        </optgroup>
+                                        <optgroup label="ค่าใช้จ่ายแฝง (Hidden Costs)">
+                                            <option selected>ค่ารักษาพยาบาลฉุกเฉิน</option>
+                                            <option>ค่าซ่อมแซมสิ่งของเสียหาย</option>
+                                            <option>ค่าฝากเลี้ยง (เดินทาง)</option>
+                                            <option>ค่าเดินทางไปคลินิก</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">รายการ <span class="text-red-500">*</span></label>
+                                    <input type="text" placeholder="เช่น สุนัขกินของเล่นเข้าไป" class="mt-1 border border-gray-300 bg-gray-50 rounded-md block w-full py-2 px-3 shadow-sm focus:outline-none focus:ring-pet-DEFAULT focus:border-pet-DEFAULT sm:text-sm">
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label>
+                                        <input type="number" placeholder="0.00" class="mt-1 border border-gray-300 bg-gray-50 rounded-md block w-full py-2 px-3 shadow-sm focus:outline-none focus:ring-pet-DEFAULT focus:border-pet-DEFAULT sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label>
+                                        <input type="date" value="2026-08-31" class="mt-1 border border-gray-300 bg-gray-50 rounded-md block w-full py-2 px-3 shadow-sm focus:outline-none focus:ring-pet-DEFAULT focus:border-pet-DEFAULT sm:text-sm">
+                                    </div>
+                                </div>
+
+                                <!-- อัปโหลดใบเสร็จ (อ้างอิง: Cloud Storage สำหรับจัดเก็บไฟล์ภาพแนบใบเสร็จ) -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">แนบใบเสร็จ (ถ้ามี)</label>
+                                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                                        <div class="space-y-1 text-center">
+                                            <i class="fa-solid fa-camera text-3xl text-gray-400 mb-2"></i>
+                                            <div class="flex text-sm text-gray-600 justify-center">
+                                                <label for="file-upload" class="relative cursor-pointer bg-transparent rounded-md font-medium text-pet-DEFAULT hover:text-pet-dark">
+                                                    <span>อัปโหลดรูปภาพ</span>
+                                                    <input id="file-upload" name="file-upload" type="file" class="sr-only" accept="image/*">
+                                                </label>
+                                                <p class="pl-1">หรือ ถ่ายรูป</p>
+                                            </div>
+                                            <p class="text-xs text-gray-500">PNG, JPG สูงสุด 10MB</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" onclick="closeModal()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-pet-DEFAULT text-base font-medium text-white hover:bg-pet-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pet-DEFAULT sm:ml-3 sm:w-auto sm:text-sm">
+                        บันทึกข้อมูล
+                    </button>
+                    <button type="button" onclick="closeModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pet-DEFAULT sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        ยกเลิก
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- สคริปต์การทำงานของหน้าเว็บ -->
+    <script>
+        // --- 1. กราฟวงกลม (Chart.js) แสดงสัดส่วนค่าใช้จ่าย ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            
+            // ข้อมูลจำลองอ้างอิงจากรายการด้านบน
+            const chartData = {
+                labels: ['ค่าอาหาร (ปกติ)', 'รักษาพยาบาล (แฝง)', 'ของใช้ (ปกติ)', 'สิ่งของเสียหาย (แฝง)'],
+                datasets: [{
+                    data: [1500, 2000, 800, 300], // มูลค่าเงิน
+                    backgroundColor: [
+                        '#60a5fa', // Blue (อาหาร)
+                        '#f87171', // Red (รักษาแฝง)
+                        '#4ade80', // Green (ของใช้ปกติ)
+                        '#fb923c'  // Orange (ของพังแฝง)
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            };
+
+            const config = {
+                type: 'doughnut',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            display: false // ซ่อน Legend เพราะเราทำ Custom Legend ไว้ด้านล่างแล้ว
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(context.parsed);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            new Chart(ctx, config);
+        });
+
+        // --- 2. ฟังก์ชันควบคุม Modal เพิ่มรายจ่าย ---
+        const modal = document.getElementById('expenseModal');
+
+        function openModal() {
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

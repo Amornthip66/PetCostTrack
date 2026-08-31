@@ -185,6 +185,40 @@
     <script src="js/auth.js"></script>
     <script src="js/dashboard.js"></script>
     <script>
+        // === Auth Callback: จัดการ redirect จาก Supabase ===
+        (function() {
+            var hash = window.location.hash;
+            if (hash && hash.includes('access_token')) {
+                var params = new URLSearchParams(hash.substring(1));
+                var accessToken = params.get('access_token');
+                var refreshToken = params.get('refresh_token');
+                var expiresIn = parseInt(params.get('expires_in') || '3600');
+                var expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+                
+                if (accessToken) {
+                    Auth.saveSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                        expires_in: expiresIn,
+                        expires_at: expiresAt
+                    });
+                    window.location.hash = '';
+                    window.location.reload();
+                    return;
+                }
+            }
+            
+            // ตรวจสอบ error จาก Supabase
+            if (hash && hash.includes('error=')) {
+                var errorParams = new URLSearchParams(hash.substring(1));
+                var error = errorParams.get('error');
+                var errorDesc = errorParams.get('error_description');
+                console.error('Auth error:', error, errorDesc);
+                alert('เกิดข้อผิดพลาด: ' + (errorDesc || error));
+                window.location.hash = '';
+            }
+        })();
+
         // === Init: ตรวจสอบ auth แล้วโหลดข้อมูล ===
         (function() {
             if (!Auth.requireAuth()) return; // redirect ไป login.html ถ้ายังไม่ login
@@ -204,8 +238,24 @@
                 return Dashboard.init();
             }).catch(function(err) {
                 console.error('Init error:', err);
-                Auth.clearSession();
-                window.location.href = 'login.html';
+                // กรณีไม่พบ profile ใน DB - ลองสร้างใหม่
+                var authId = Auth.getAuthUserId();
+                var session = Auth.getSession();
+                if (authId && session && session.user) {
+                    var u = session.user;
+                    Auth.createUserProfile(u.name || u.email, u.email, 'Owner', authId)
+                    .then(function() {
+                        window.location.reload(); // reload หลังสร้าง profile
+                    })
+                    .catch(function(e) {
+                        console.error('Create profile failed:', e);
+                        Auth.clearSession();
+                        window.location.href = 'login.html';
+                    });
+                } else {
+                    Auth.clearSession();
+                    window.location.href = 'login.html';
+                }
             });
         })();
     </script>

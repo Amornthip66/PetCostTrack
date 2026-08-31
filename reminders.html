@@ -64,7 +64,10 @@
             if (!UI.initPage('reminders')) return;
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { Reminders.init(); });
+            }).then(function() { Reminders.init(); })
+            .catch(function(err) {
+                console.error('Reminders page init error:', err);
+            });
         })();
     </script>
 </body>

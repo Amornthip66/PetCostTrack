@@ -14,7 +14,7 @@ var Api = (function() {
     }
 
     function count(table) {
-        return fetch(CONFIG.REST + '/' + table + '?select=id&limit=1', {
+        return fetch(CONFIG.REST + '/' + table + '?select=*&limit=0', {
             headers: Object.assign({
                 'Prefer': 'count=exact',
                 'Range-Unit': 'items',
@@ -35,7 +35,12 @@ var Api = (function() {
                 'Prefer': 'return=representation'
             }, Auth.headers()),
             body: JSON.stringify(row)
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            return r.json().then(function(data) {
+                if (!r.ok) throw new Error(data.message || data.error || 'Insert failed (' + r.status + ')');
+                return data;
+            });
+        });
     }
 
     function update(table, params, row) {
@@ -46,14 +51,24 @@ var Api = (function() {
                 'Prefer': 'return=representation'
             }, Auth.headers()),
             body: JSON.stringify(row)
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            return r.json().then(function(data) {
+                if (!r.ok) throw new Error(data.message || data.error || 'Update failed (' + r.status + ')');
+                return data;
+            });
+        });
     }
 
     function remove(table, params) {
         return fetch(CONFIG.REST + '/' + table + '?' + params, {
             method: 'DELETE',
             headers: Auth.headers()
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            return r.json().then(function(data) {
+                if (!r.ok) throw new Error(data.message || data.error || 'Delete failed (' + r.status + ')');
+                return data;
+            });
+        });
     }
 
     return {

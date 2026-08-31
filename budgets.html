@@ -64,7 +64,9 @@
     <script>
         (function() {
             if (!UI.initPage('budgets')) return;
-            Auth.loadProfile().then(function() { Budgets.init(); });
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function() { Budgets.init(); });
         })();
     </script>
 </body>

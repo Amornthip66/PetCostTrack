@@ -62,7 +62,9 @@
     <script>
         (function() {
             if (!UI.initPage('reminders')) return;
-            Auth.loadProfile().then(function() { Reminders.init(); });
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function() { Reminders.init(); });
         })();
     </script>
 </body>

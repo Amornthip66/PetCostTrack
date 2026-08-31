@@ -5,7 +5,6 @@ node_modules/
 .env
 .env.*
 !.env.example
-js/config.env.js
 
 # Supabase
 supabase/.branches

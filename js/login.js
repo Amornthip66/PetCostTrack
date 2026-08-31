@@ -46,15 +46,33 @@
             document.getElementById('loginEmail').value,
             document.getElementById('loginPassword').value
         ).then(function(data) {
-            if (data.error) {
-                showError('loginError', data.error_description || data.error);
+            console.log('Login response:', data); // Debug
+            
+            // ตรวจสอบ error ทุกรูปแบบจาก Supabase
+            var errMsg = data.error_description || data.error || 
+                         data.message || data.msg || null;
+            var errCode = data.code || null;
+            
+            if (errMsg || errCode) {
+                var displayMsg = errMsg || 'เกิดข้อผิดพลาด (code: ' + errCode + ')';
+                showError('loginError', displayMsg);
                 setLoading('loginBtn', false, 'เข้าสู่ระบบ');
                 return;
             }
+            
+            // ตรวจสอบว่ามี access_token ไหม
+            if (!data.access_token) {
+                showError('loginError', 'ไม่ได้รับ token จาก server');
+                setLoading('loginBtn', false, 'เข้าสู่ระบบ');
+                return;
+            }
+            
             Auth.saveSession(data);
+            console.log('Session saved:', Auth.getSession()); // Debug
             window.location.href = 'index.html';
         }).catch(function(err) {
-            showError('loginError', 'เกิดข้อผิดพลาด: ' + err.message);
+            console.error('Login error:', err);
+            showError('loginError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
             setLoading('loginBtn', false, 'เข้าสู่ระบบ');
         });
     };
@@ -72,37 +90,57 @@
         var role = document.getElementById('signupRole').value;
 
         Auth.signup(email, password)
-        .then(function(data) {
-            // Supabase ใช้ error / code / message สำหรับ error หลายรูปแบบ
-            if (data.error || data.code || data.message) {
-                var errMsg = data.error_description || data.error || data.message || 'เกิดข้อผิดพลาด';
-                showError('signupError', errMsg);
+        .then(function(response) {
+            console.log('Signup response:', response); // Debug
+            
+            // Supabase error formats: {error}, {code, message}, {msg}
+            var errMsg = response.error_description || response.error || 
+                         response.message || response.msg || null;
+            var errCode = response.code || null;
+            
+            if (errMsg || errCode) {
+                // แสดง error message ที่เข้าใจง่าย
+                var displayMsg = errMsg || 'เกิดข้อผิดพลาด (code: ' + errCode + ')';
+                if (errCode === '400' && errMsg && errMsg.includes('email')) {
+                    displayMsg = 'อีเมลนี้ถูกใช้แล้วหรือรูปแบบไม่ถูกต้อง';
+                }
+                showError('signupError', displayMsg);
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }
-            Auth.saveSession(data);
-            // กรณี confirm email แล้ว data.user อาจไม่มี
-            var userId = data.user && data.user.id ? data.user.id : null;
+            
+            // สำเร็จ - บันทึก session
+            Auth.saveSession(response);
+            var userId = response.user && response.user.id ? response.user.id : null;
+            
             if (!userId) {
+                // กรณี confirm email
                 document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน';
                 document.getElementById('signupSuccess').classList.remove('hidden');
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }
+            
+            // สร้าง user profile ใน DB
             return Auth.createUserProfile(name, email, role, userId);
         })
         .then(function(result) {
-            if (!result) return; // email confirmation flow — ไม่ต้องทำอะไรเพิ่ม
-            if (result && result.error) {
-                showError('signupError', result.message || result.error);
+            if (!result) return; // email confirmation flow
+            
+            if (result && (result.error || result.code)) {
+                var profileErr = result.message || result.error || 'ไม่สามารถสร้าง profile ได้';
+                showError('signupError', profileErr);
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }
+            
             document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กำลังเข้าสู่ระบบ...';
             document.getElementById('signupSuccess').classList.remove('hidden');
             setTimeout(function() { window.location.href = 'index.html'; }, 1000);
-        }).catch(function(err) {
-            showError('signupError', 'เกิดข้อผิดพลาด: ' + err.message);
+        })
+        .catch(function(err) {
+            console.error('Signup error:', err);
+            showError('signupError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
             setLoading('signupBtn', false, 'สมัครสมาชิก');
         });
     };

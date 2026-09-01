@@ -19,15 +19,50 @@ var Reminders = (function() {
 
     function populateForm() {
         var petSel = document.getElementById('formPet');
-        _pets.forEach(function(p) { var o = document.createElement('option'); o.value = p.pet_id; o.textContent = p.name; petSel.appendChild(o); });
+        if (petSel) {
+            petSel.innerHTML = '';
+            if (!_pets.length) {
+                petSel.innerHTML = '<option value="">ไม่พบสัตว์เลี้ยง (กรุณาเพิ่มสัตว์เลี้ยงก่อน)</option>';
+            } else {
+                _pets.forEach(function(p) {
+                    var o = document.createElement('option');
+                    o.value = p.pet_id;
+                    o.textContent = p.name;
+                    petSel.appendChild(o);
+                });
+            }
+        }
         var catSel = document.getElementById('formCategory');
-        _categories.forEach(function(c) { var o = document.createElement('option'); o.value = c.category_id; o.textContent = c.category_name; catSel.appendChild(o); });
-        document.getElementById('formDue').value = new Date().toISOString().split('T')[0];
+        if (catSel) {
+            catSel.innerHTML = '';
+            _categories.forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.category_id;
+                o.textContent = c.category_name;
+                catSel.appendChild(o);
+            });
+        }
+        var dueInput = document.getElementById('formDue');
+        if (dueInput) {
+            dueInput.value = new Date().toISOString().split('T')[0];
+        }
     }
 
     function load() {
-        Api.query('reminders', 'select=task_id,frequency,next_due_date,is_completed,pets(name),categories(category_name)&order=next_due_date.asc&limit=50')
-        .then(function(data) { _reminders = data || []; render(); });
+        var list = document.getElementById('reminderList');
+        if (list) {
+            list.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลดการแจ้งเตือน...</div>';
+        }
+        Api.query('reminders', 'select=task_id,frequency,next_due_date,is_completed,pet_id,category_id,pets(pet_id,name),categories(category_id,category_name)&order=next_due_date.asc&limit=50')
+        .then(function(data) {
+            _reminders = data || [];
+            render();
+        }).catch(function(err) {
+            console.error('Error loading reminders:', err);
+            if (list) {
+                list.innerHTML = '<div class="text-center py-12 text-red-500"><i class="fa-solid fa-triangle-exclamation mr-2"></i>เกิดข้อผิดพลาดในการโหลดการแจ้งเตือน (' + err.message + ')</div>';
+            }
+        });
     }
 
     function render() {

@@ -42,10 +42,11 @@
         hideError('loginError');
         setLoading('loginBtn', true, 'กำลังเข้าสู่ระบบ...');
 
-        Auth.login(
-            document.getElementById('loginEmail').value,
-            document.getElementById('loginPassword').value
-        ).then(function(data) {
+        var email = document.getElementById('loginEmail').value.trim();
+        var password = document.getElementById('loginPassword').value;
+
+        Auth.login(email, password)
+        .then(function(data) {
             console.log('Login response:', data); // Debug
             
             // ตรวจสอบ error ทุกรูปแบบจาก Supabase
@@ -55,6 +56,11 @@
             
             if (errMsg || errCode) {
                 var displayMsg = errMsg || 'เกิดข้อผิดพลาด (code: ' + errCode + ')';
+                if (errMsg === 'invalid_grant' || errMsg === 'Invalid login credentials' || displayMsg.indexOf('Invalid login credentials') >= 0) {
+                    displayMsg = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+                } else if (errMsg === 'Email not confirmed' || displayMsg.indexOf('Email not confirmed') >= 0) {
+                    displayMsg = 'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (ตรวจสอบใน Inbox/Spam)';
+                }
                 showError('loginError', displayMsg);
                 setLoading('loginBtn', false, 'เข้าสู่ระบบ');
                 return;
@@ -69,10 +75,9 @@
             
             Auth.saveSession(data);
             console.log('Session saved:', Auth.getSession()); // Debug
-            // Auto-link กับ seed data ก่อนเข้า dashboard
-            Auth.autoLinkUser().then(function() {
-                window.location.href = 'index.html';
-            });
+            
+            // ไปหน้า index.html ทันที
+            window.location.href = 'index.html';
         }).catch(function(err) {
             console.error('Login error:', err);
             showError('loginError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));

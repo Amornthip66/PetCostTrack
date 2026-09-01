@@ -197,7 +197,14 @@
             // Auto-link user กับ seed data ก่อนโหลด profile
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
+            }).catch(function(err) {
+                console.warn('Profile link warning:', err);
+                return Auth.loadProfile();
             }).then(function(user) {
+                // อัปเดต Navbar หลังโหลด profile สำเร็จ
+                var nav = document.getElementById('mainNav');
+                if (nav) nav.innerHTML = UI.renderNav('dashboard');
+
                 // ตั้งค่าวันที่ปัจจุบันในฟอร์ม
                 var today = new Date();
                 var dateInput = document.getElementById('formDate');
@@ -206,25 +213,11 @@
                 // โหลดข้อมูล dashboard
                 return Dashboard.init();
             }).catch(function(err) {
-                console.error('Init error:', err);
-                // กรณีไม่พบ profile ใน DB - ลองสร้างใหม่
-                var authId = Auth.getAuthUserId();
-                var session = Auth.getSession();
-                if (authId && session && session.user) {
-                    var u = session.user;
-                    Auth.createUserProfile(u.name || u.email, u.email, 'Owner', authId)
-                    .then(function() {
-                        window.location.reload(); // reload หลังสร้าง profile
-                    })
-                    .catch(function(e) {
-                        console.error('Create profile failed:', e);
-                        Auth.clearSession();
-                        window.location.href = 'login.html';
-                    });
-                } else {
-                    Auth.clearSession();
-                    window.location.href = 'login.html';
-                }
+                console.error('Init error in dashboard:', err);
+                // พยายามโหลด Dashboard แม้จะมี warning
+                Dashboard.init().catch(function(e) {
+                    console.error('Dashboard init failed:', e);
+                });
             });
         })();
     </script>

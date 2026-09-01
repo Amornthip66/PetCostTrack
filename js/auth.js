@@ -25,6 +25,10 @@ var Auth = (function() {
     }
 
     function saveSession(data) {
+        if (!data) return;
+        if (data.expires_in && !data.expires_at) {
+            data.expires_at = Math.floor(Date.now() / 1000) + parseInt(data.expires_in);
+        }
         _session = data;
         localStorage.setItem('sb_session', JSON.stringify(data));
     }
@@ -106,10 +110,60 @@ var Auth = (function() {
 
         return Api.query('users', 'select=user_id,name,email,role&auth_id=eq.' + authId)
         .then(function(users) {
-            if (!users || !users.length) {
-                throw new Error('ไม่พบข้อมูลผู้ใช้ในระบบ');
+            if (users && users.length) {
+                _user = users[0];
+                return _user;
             }
-            _user = users[0];
+
+            // ถ้าไม่พบจาก auth_id ให้ลองค้นหาจาก email
+            var s = getSession();
+            var email = (s && s.user && s.user.email) ? s.user.email : '';
+            var meta = (s && s.user && (s.user.user_metadata || s.user.raw_user_meta_data)) || {};
+            var name = meta.name || (email ? email.split('@')[0] : 'User');
+            var role = meta.role || 'Owner';
+
+            if (email) {
+                return Api.query('users', 'select=user_id,name,email,role&email=eq.' + encodeURIComponent(email))
+                .then(function(emailUsers) {
+                    if (emailUsers && emailUsers.length) {
+                        // พบผู้ใช้เดิม (Seed) -> Update auth_id
+                        return Api.update('users', 'user_id=eq.' + emailUsers[0].user_id, { auth_id: authId })
+                        .then(function(updated) {
+                            _user = (Array.isArray(updated) && updated.length) ? updated[0] : emailUsers[0];
+                            return _user;
+                        }).catch(function() {
+                            _user = emailUsers[0];
+                            return _user;
+                        });
+                    }
+
+                    // ยังไม่มี profile -> สร้างใหม่
+                    return createUserProfile(name, email, role, authId)
+                    .then(function(created) {
+                        _user = (Array.isArray(created) && created.length) ? created[0] : {
+                            name: name,
+                            email: email,
+                            role: role,
+                            auth_id: authId
+                        };
+                        return _user;
+                    }).catch(function() {
+                        // Fallback object ไม่ให้แอปล่ม
+                        _user = {
+                            name: name,
+                            email: email,
+                            role: role,
+                            auth_id: authId
+                        };
+                        return _user;
+                    });
+                }).catch(function() {
+                    _user = { name: name, email: email, role: role, auth_id: authId };
+                    return _user;
+                });
+            }
+
+            _user = { name: name, email: email, role: role, auth_id: authId };
             return _user;
         });
     }

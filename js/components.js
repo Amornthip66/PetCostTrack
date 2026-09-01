@@ -6,8 +6,11 @@ var UI = (function() {
 
     function renderNav(activePage) {
         var user = Auth.getUser();
-        var userName = user ? user.name : '';
-        var userRole = user ? user.role : '';
+        var session = Auth.getSession();
+        var sessionEmail = (session && session.user && session.user.email) ? session.user.email : '';
+        var meta = (session && session.user && (session.user.user_metadata || session.user.raw_user_meta_data)) || {};
+        var userName = (user && user.name) ? user.name : (meta.name || (sessionEmail ? sessionEmail.split('@')[0] : 'ผู้ใช้งาน'));
+        var userRole = (user && user.role) ? user.role : (meta.role || 'Owner');
         var avatarName = encodeURIComponent(userName);
         var pages = [
             { id: 'dashboard', label: 'แดชบอร์ด', icon: 'fa-chart-pie', href: 'index.html' },

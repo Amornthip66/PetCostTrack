@@ -131,27 +131,23 @@ var Dashboard = (function() {
         var date = document.getElementById('formDate').value;
         var petId = document.getElementById('formPet').value;
 
-        if (!amount || !date || !petId) {
+        if (!amount||!date||!petId) {
             alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
             return;
         }
 
-        var userId = (user && user.user_id) ? user.user_id : 1;
-        var hidden = [4,5,6].indexOf(Number(catId)) >= 0;
-
-        return Api.insert('expenses', {
+        var hidden = [4,5,6].indexOf(Number(catId))>=0;
+        return Api.insert('expenses',{
             amount: Number(amount),
             expense_date: date,
             expense_type: hidden ? 'แฝง' : 'หลัก',
             pet_id: Number(petId),
-            user_id: userId,
+            user_id: user.user_id,
             category_id: Number(catId),
             expense_note: note || null
         }).then(function() {
             closeModal();
             return Promise.all([loadKPIs(), loadExpenseList(), loadChart()]);
-        }).catch(function(err) {
-            alert('บันทึกไม่สำเร็จ: ' + err.message);
         });
     }
 

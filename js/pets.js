@@ -16,64 +16,60 @@ var Pets = (function() {
             grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลดสัตว์เลี้ยง...</div>';
         }
 
-        return (Auth.getUser() ? Promise.resolve(Auth.getUser()) : Auth.loadProfile())
-        .catch(function() { return null; })
-        .then(function(user) {
-            var userId = (user && user.user_id) ? user.user_id : null;
-            if (!userId) {
-                // Fallback ถ้ายังไม่มี user_id ให้ลองโหลดสัตว์เลี้ยงทั้งหมดตรงๆ
+        var user = Auth.getUser();
+        if (!user || !user.user_id) {
+            // Fallback ถ้ายังไม่มี user_id ให้ลองโหลดสัตว์เลี้ยงทั้งหมดตรงๆ
+            return Api.query('pets', 'select=pet_id,name,type_breed,age')
+            .then(function(pets) {
+                _pets = (pets || []).map(function(p) {
+                    return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: 'Owner' };
+                });
+                render();
+            }).catch(function(err) {
+                console.error('Error loading pets:', err);
+                _pets = [];
+                render();
+            });
+        }
+
+        // Query pet_access first, then pets separately to avoid embedded resource RLS 403
+        return Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + user.user_id)
+        .then(function(access) {
+            if (!access || !access.length) {
+                // ถ้ายังไม่มี pet_access ลองเช็คว่ามีสัตว์เลี้ยงในระบบไหม
                 return Api.query('pets', 'select=pet_id,name,type_breed,age')
                 .then(function(pets) {
                     _pets = (pets || []).map(function(p) {
                         return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: 'Owner' };
                     });
                     render();
-                }).catch(function(err) {
-                    console.error('Error loading pets:', err);
+                }).catch(function() {
                     _pets = [];
                     render();
                 });
             }
-
-            // Query pet_access first, then pets separately to avoid embedded resource RLS 403
-            return Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId)
-            .then(function(access) {
-                if (!access || !access.length) {
-                    // ถ้ายังไม่มี pet_access ลองเช็คว่ามีสัตว์เลี้ยงในระบบไหม
-                    return Api.query('pets', 'select=pet_id,name,type_breed,age')
-                    .then(function(pets) {
-                        _pets = (pets || []).map(function(p) {
-                            return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: 'Owner' };
-                        });
-                        render();
-                    }).catch(function() {
-                        _pets = [];
-                        render();
-                    });
-                }
-                var petIds = access.map(function(a) { return a ? a.pet_id : null; }).filter(Boolean);
-                if (!petIds.length) {
-                    _pets = [];
-                    render();
-                    return;
-                }
-                var accessMap = {};
-                access.forEach(function(a) { if (a && a.pet_id) accessMap[a.pet_id] = a.access_role; });
-                return Api.query('pets', 'select=pet_id,name,type_breed,age&pet_id=in.(' + petIds.join(',') + ')')
-                .then(function(pets) {
-                    _pets = (pets || []).map(function(p) {
-                        return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: accessMap[p.pet_id] || 'Owner' };
-                    });
-                    render();
+            var petIds = access.map(function(a) { return a.pet_id; }).filter(Boolean);
+            if (!petIds.length) {
+                _pets = [];
+                render();
+                return;
+            }
+            var accessMap = {};
+            access.forEach(function(a) { accessMap[a.pet_id] = a.access_role; });
+            return Api.query('pets', 'select=pet_id,name,type_breed,age&pet_id=in.(' + petIds.join(',') + ')')
+            .then(function(pets) {
+                _pets = (pets || []).map(function(p) {
+                    return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: accessMap[p.pet_id] || 'Owner' };
                 });
-            }).catch(function(err) {
-                console.error('Error loading pet_access:', err);
-                return Api.query('pets', 'select=pet_id,name,type_breed,age').then(function(pets) {
-                    _pets = (pets || []).map(function(p) {
-                        return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: 'Owner' };
-                    });
-                    render();
+                render();
+            });
+        }).catch(function(err) {
+            console.error('Error loading pet_access:', err);
+            return Api.query('pets', 'select=pet_id,name,type_breed,age').then(function(pets) {
+                _pets = (pets || []).map(function(p) {
+                    return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: 'Owner' };
                 });
+                render();
             });
         });
     }
@@ -136,26 +132,19 @@ var Pets = (function() {
         if (id) {
             promise = Api.update('pets', 'pet_id=eq.' + id, data);
         } else {
-            // มั่นใจว่าโหลด profile ให้เสร็จก่อนเพื่อใช้ user_id
-            promise = (Auth.getUser() && Auth.getUser().user_id ? Promise.resolve(Auth.getUser()) : Auth.loadProfile())
-            .catch(function() { return null; })
-            .then(function(user) {
-                var u = user || Auth.getUser();
-                return Api.insert('pets', data).then(function(newPet) {
-                    var created = Array.isArray(newPet) ? newPet[0] : newPet;
-                    if (u && u.user_id && created && created.pet_id) {
-                        return Api.insert('pet_access', {
-                            pet_id: created.pet_id,
-                            user_id: u.user_id,
-                            access_role: u.role || 'Owner'
-                        }).catch(function(err) {
-                            console.warn('Could not insert pet_access record:', err);
-                        }).then(function() {
-                            return created;
-                        });
-                    }
-                    return created;
-                });
+            promise = Api.insert('pets', data).then(function(newPet) {
+                var created = Array.isArray(newPet) ? newPet[0] : newPet;
+                var user = Auth.getUser();
+                if (user && user.user_id && created && created.pet_id) {
+                    return Api.insert('pet_access', {
+                        pet_id: created.pet_id,
+                        user_id: user.user_id,
+                        access_role: user.role || 'Owner'
+                    }).catch(function(err) {
+                        console.warn('Could not insert pet_access record:', err);
+                    });
+                }
+                return created;
             });
         }
 
@@ -163,8 +152,7 @@ var Pets = (function() {
             closeModal();
             load();
         }).catch(function(e) {
-            console.error('Save pet error:', e);
-            alert('เกิดข้อผิดพลาด: ' + (e.message || e));
+            alert('เกิดข้อผิดพลาด: ' + e.message);
         });
     }
 

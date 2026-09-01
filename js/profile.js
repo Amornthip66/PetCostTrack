@@ -106,12 +106,7 @@ var Profile = (function() {
     function changePassword() {
         var session = Auth.getSession();
         if (!session || !session.access_token) return;
-        var user = Auth.getUser();
-        var email = user ? user.email : ((session && session.user) ? session.user.email : '');
-        if (!email) {
-            alert('ไม่พบอีเมลผู้ใช้');
-            return;
-        }
+        var email = Auth.getUser().email;
         // ใช้ Supabase Auth API ส่ง reset password email
         fetch(CONFIG.AUTH + '/recover', {
             method: 'POST',

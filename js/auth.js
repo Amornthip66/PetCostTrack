@@ -50,11 +50,15 @@ var Auth = (function() {
     }
 
     // === Auth API ===
-    function signup(email, password) {
+    function signup(email, password, metadata) {
+        var body = { email: email, password: password };
+        if (metadata) {
+            body.data = metadata;
+        }
         return fetch(CONFIG.AUTH + '/signup', {
             method: 'POST',
             headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: password })
+            body: JSON.stringify(body)
         }).then(function(r) { return r.json(); });
     }
 

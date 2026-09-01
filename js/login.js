@@ -92,7 +92,7 @@
         var password = document.getElementById('signupPassword').value;
         var role = document.getElementById('signupRole').value;
 
-        Auth.signup(email, password)
+        Auth.signup(email, password, { name: name, role: role })
         .then(function(response) {
             console.log('Signup response:', response); // Debug
             
@@ -104,7 +104,9 @@
             if (errMsg || errCode) {
                 // แสดง error message ที่เข้าใจง่าย
                 var displayMsg = errMsg || 'เกิดข้อผิดพลาด (code: ' + errCode + ')';
-                if (errCode === '400' && errMsg && errMsg.includes('email')) {
+                if (displayMsg.indexOf('Database error saving new user') >= 0) {
+                    displayMsg = 'เกิดข้อผิดพลาดที่ฐานข้อมูล (Database error saving new user) กรุณารัน SQL Migration แก้ไข Trigger ใน Supabase';
+                } else if (errCode === '400' && errMsg && errMsg.includes('email')) {
                     displayMsg = 'อีเมลนี้ถูกใช้แล้วหรือรูปแบบไม่ถูกต้อง';
                 }
                 showError('signupError', displayMsg);
@@ -112,45 +114,39 @@
                 return;
             }
             
-            // สำเร็จ - บันทึก session
-            Auth.saveSession(response);
-            var userId = response.user && response.user.id ? response.user.id : null;
+            // สำเร็จ - บันทึก session (ถ้ามี token ส่งกลับมา)
+            var sessionData = response.session || response;
+            if (sessionData && sessionData.access_token) {
+                Auth.saveSession(sessionData);
+            }
+
+            var userId = (response.user && response.user.id) ? response.user.id : (response.id || null);
             
-            if (!userId) {
-                // กรณี confirm email
-                document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน';
+            if (!sessionData || !sessionData.access_token) {
+                // กรณี Supabase เปิด Confirm Email ไว้
+                document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตนก่อนเข้าสู่ระบบ';
                 document.getElementById('signupSuccess').classList.remove('hidden');
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;
             }
             
-            // Auto-link กับ seed data (trigger อาจทำงานแล้ว)
+            // Auto-link กับ seed data (trigger ทำงานแล้ว แต่เรียกซ้ำเพื่อความชัวร์)
             return Auth.autoLinkUser().then(function() {
                 // ลองเช็คว่า profile มีอยู่แล้วหรือยัง
                 return Auth.loadProfile().then(function() {
-                    // profile มีอยู่แล้ว (trigger link สำเร็จ)
+                    // profile มีอยู่แล้ว
                     document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กำลังเข้าสู่ระบบ...';
                     document.getElementById('signupSuccess').classList.remove('hidden');
                     setTimeout(function() { window.location.href = 'index.html'; }, 1000);
                 }).catch(function() {
                     // ยังไม่มี profile → สร้างใหม่
-                    return Auth.createUserProfile(name, email, role, userId);
+                    return Auth.createUserProfile(name, email, role, userId).then(function() {
+                        document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กำลังเข้าสู่ระบบ...';
+                        document.getElementById('signupSuccess').classList.remove('hidden');
+                        setTimeout(function() { window.location.href = 'index.html'; }, 1000);
+                    });
                 });
             });
-        })
-        .then(function(result) {
-            if (!result) return; // email confirmation flow or existing profile
-            
-            if (result && (result.error || result.code)) {
-                var profileErr = result.message || result.error || 'ไม่สามารถสร้าง profile ได้';
-                showError('signupError', profileErr);
-                setLoading('signupBtn', false, 'สมัครสมาชิก');
-                return;
-            }
-            
-            document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กำลังเข้าสู่ระบบ...';
-            document.getElementById('signupSuccess').classList.remove('hidden');
-            setTimeout(function() { window.location.href = 'index.html'; }, 1000);
         })
         .catch(function(err) {
             console.error('Signup error:', err);

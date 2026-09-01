@@ -1,0 +1,88 @@
+/**
+ * Shared Components
+ * Nav bar, page layout, common UI elements
+ */
+var UI = (function() {
+
+    function renderNav(activePage) {
+        var user = Auth.getUser();
+        var session = Auth.getSession();
+        var sessionEmail = (session && session.user && session.user.email) ? session.user.email : '';
+        var meta = (session && session.user && (session.user.user_metadata || session.user.raw_user_meta_data)) || {};
+        var userName = (user && user.name) ? user.name : (meta.name || (sessionEmail ? sessionEmail.split('@')[0] : 'ผู้ใช้งาน'));
+        var userRole = (user && user.role) ? user.role : (meta.role || 'Owner');
+        var avatarName = encodeURIComponent(userName);
+        var pages = [
+            { id: 'dashboard', label: 'แดชบอร์ด', icon: 'fa-chart-pie', href: 'index.html' },
+            { id: 'pets', label: 'สัตว์เลี้ยงของฉัน', icon: 'fa-paw', href: 'pets.html' },
+            { id: 'history', label: 'ประวัติรายจ่าย', icon: 'fa-clock-rotate-left', href: 'history.html' },
+            { id: 'reminders', label: 'การแจ้งเตือน', icon: 'fa-bell', href: 'reminders.html' },
+            { id: 'budgets', label: 'งบประมาณ', icon: 'fa-coins', href: 'budgets.html' },
+            { id: 'profile', label: 'โปรไฟล์', icon: 'fa-user', href: 'profile.html' }
+        ];
+
+        var navLinks = pages.map(function(p) {
+            var cls = p.id === activePage
+                ? 'border-pet-DEFAULT text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium';
+            return '<a href="' + p.href + '" class="' + cls + '">' + p.label + '</a>';
+        }).join('');
+
+        return '<nav class="bg-white shadow-sm sticky top-0 z-40">'
+            + '<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">'
+            + '<div class="flex justify-between h-16">'
+            + '<div class="flex items-center">'
+            + '<div class="flex-shrink-0 flex items-center text-pet-DEFAULT">'
+            + '<i class="fa-solid fa-paw text-2xl mr-2"></i>'
+            + '<span class="font-bold text-xl tracking-wide">PetCostTrack</span>'
+            + '</div>'
+            + '<div class="hidden sm:ml-8 sm:flex sm:space-x-6">' + navLinks + '</div>'
+            + '</div>'
+            + '<div class="hidden sm:ml-6 sm:flex sm:items-center gap-3">'
+            + '<div class="text-right mr-2">'
+            + '<div class="text-sm font-medium text-gray-700">' + userName + '</div>'
+            + '<div class="text-xs text-gray-500">' + userRole + '</div>'
+            + '</div>'
+            + '<img class="h-10 w-10 rounded-full object-cover border-2 border-pet-DEFAULT" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=0ea5e9&color=fff" alt="Avatar">'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '</div>'
+            + '<div class="flex items-center sm:hidden">'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-gray-400 hover:text-red-500"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '</div>'
+            + '</div></div></nav>';
+    }
+
+    function fmt(n) { return new Intl.NumberFormat('th-TH').format(n); }
+
+    var THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    function formatDate(s) {
+        var d = new Date(s);
+        return d.getDate() + ' ' + THAI_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543);
+    }
+
+    function formatDateTime(s) {
+        var d = new Date(s);
+        return formatDate(s) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+
+    function getIcon(c) {
+        if (!c) return {i:'fa-receipt',bg:'bg-gray-100',cl:'text-gray-500'};
+        var n = c.toLowerCase();
+        if (n.indexOf('อาหาร')>=0) return {i:'fa-bowl-food',bg:'bg-blue-100',cl:'text-blue-500'};
+        if (n.indexOf('วัคซีน')>=0||n.indexOf('ตรวจ')>=0) return {i:'fa-syringe',bg:'bg-green-100',cl:'text-green-500'};
+        if (n.indexOf('รักษา')>=0||n.indexOf('ฉุกเฉิน')>=0) return {i:'fa-stethoscope',bg:'bg-red-100',cl:'text-pet-hidden'};
+        if (n.indexOf('เสียหาย')>=0||n.indexOf('พัง')>=0) return {i:'fa-couch',bg:'bg-orange-100',cl:'text-orange-500'};
+        if (n.indexOf('ฝากเลี้ยง')>=0) return {i:'fa-house-user',bg:'bg-purple-100',cl:'text-purple-500'};
+        if (n.indexOf('ถ่ายพยาธิ')>=0) return {i:'fa-pills',bg:'bg-teal-100',cl:'text-teal-500'};
+        return {i:'fa-receipt',bg:'bg-gray-100',cl:'text-gray-500'};
+    }
+
+    function initPage(activePage) {
+        if (!Auth.requireAuth()) return false;
+        var nav = document.getElementById('mainNav');
+        if (nav) nav.innerHTML = renderNav(activePage);
+        return true;
+    }
+
+    return { renderNav: renderNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon };
+})();

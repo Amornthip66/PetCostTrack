@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PetCostTrack - งบประมาณ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }</script>
+    <style>body { background-color: #f8fafc; }</style>
+</head>
+<body class="text-gray-800 antialiased">
+    <div id="mainNav"></div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">งบประมาณ</h1>
+                <p class="text-sm text-gray-500 mt-1">ตั้งงบรายเดือนสำหรับสัตว์เลี้ยงแต่ละตัว</p>
+            </div>
+            <button onclick="Budgets.openModal()" class="px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition flex items-center">
+                <i class="fa-solid fa-plus mr-2"></i> ตั้งงบใหม่
+            </button>
+        </div>
+
+        <div id="budgetList" class="space-y-4">
+            <div class="text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="budgetModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75" onclick="Budgets.closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">ตั้งงบประมาณรายเดือน</h3>
+                    <div class="space-y-4">
+                        <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></select></div>
+                        <div><label class="block text-sm font-medium text-gray-700">งบประมาณ (บาท) <span class="text-red-500">*</span></label><input id="formLimit" type="number" placeholder="เช่น 3000" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-gray-700">เดือน</label><select id="formMonth" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></select></div>
+                            <div><label class="block text-sm font-medium text-gray-700">ปี</label><input id="formYear" type="number" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                    <button onclick="Budgets.save()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">บันทึก</button>
+                    <button onclick="Budgets.closeModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 sm:mt-0">ยกเลิก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/budgets.js"></script>
+    <script>
+        (function() {
+            if (!UI.initPage('budgets')) return;
+            Auth.autoLinkUser().then(function() {
+                return Auth.loadProfile();
+            }).then(function() { Budgets.init(); })
+            .catch(function(err) {
+                console.error('Budgets page init error:', err);
+            });
+        })();
+    </script>
+</body>
+</html>

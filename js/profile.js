@@ -106,7 +106,6 @@ var Profile = (function() {
     function changePassword() {
         var session = Auth.getSession();
         if (!session || !session.access_token) return;
-        var email = Auth.getUser().email;
         var user = Auth.getUser();
         var email = user ? user.email : ((session && session.user) ? session.user.email : '');
         if (!email) {

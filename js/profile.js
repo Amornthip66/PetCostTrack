@@ -18,88 +18,43 @@ var Profile = (function() {
     }
 
     function loadFamily() {
-        var familyContainer = document.getElementById('familyList');
-        if (!familyContainer) return;
         var user = Auth.getUser();
-        if (!user || !user.user_id) {
-            familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีข้อมูลสมาชิก</p>';
-            return;
-        }
-
-        familyContainer.innerHTML = '<p class="text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลดสมาชิกครอบครัว...</p>';
-
-        // 1. หา pet_id ที่ผู้ใช้นี้มีสิทธิ์
-        Api.query('pet_access', 'select=pet_id&user_id=eq.' + user.user_id)
-        .then(function(userPets) {
-            if (!userPets || !userPets.length) {
-                familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว (ยังไม่มีสัตว์เลี้ยงที่แชร์)</p>';
+        // หา user_id ของคนที่มีสัตว์เลี้ยงร่วมกัน
+        Api.query('pet_access', 'select=user_id,access_role&pet_id=in.(select pet_id from pet_access where user_id=' + user.user_id + ')')
+        .then(function(access) {
+            var userIds = (access || []).map(function(a) { return a.user_id; });
+            userIds = userIds.filter(function(id) { return id !== user.user_id; });
+            if (!userIds.length) {
+                document.getElementById('familyList').innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
                 return;
             }
-            var petIds = userPets.map(function(p) { return p.pet_id; }).filter(Boolean);
-            if (!petIds.length) {
-                familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
-                return;
-            }
-
-            // 2. หา user_id อื่นที่แชร์สัตว์เลี้ยงเดียวกัน
-            return Api.query('pet_access', 'select=user_id,access_role,pet_id&pet_id=in.(' + petIds.join(',') + ')&user_id=neq.' + user.user_id)
-            .then(function(otherAccess) {
-                if (!otherAccess || !otherAccess.length) {
-                    familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
-                    return;
-                }
-                var userIds = Array.from(new Set(otherAccess.map(function(a) { return a.user_id; }).filter(Boolean)));
-                if (!userIds.length) {
-                    familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
-                    return;
-                }
-
-                // 3. ดึงข้อมูลโปรไฟล์ของสมาชิกเหล่านั้น
-                return Api.query('users', 'select=user_id,name,email,role&user_id=in.(' + userIds.join(',') + ')')
-                .then(function(members) {
-                    if (!members || !members.length) {
-                        familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
-                        return;
-                    }
-                    familyContainer.innerHTML = members.map(function(m) {
-                        return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
-                            + '<img class="h-10 w-10 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name || 'User') + '&background=e0f2fe&color=0369a1" alt="">'
-                            + '<div><p class="text-sm font-medium text-gray-900">' + (m.name || 'ผู้ใช้งาน') + '</p><p class="text-xs text-gray-500">' + (m.email || '—') + ' • ' + (m.role || 'Member') + '</p></div>'
-                            + '</div>';
-                    }).join('');
-                });
-            });
-        }).catch(function(err) {
-            console.error('Error loading family:', err);
-            familyContainer.innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
+            return Api.query('users', 'select=user_id,name,email,role&user_id=in.(' + userIds.join(',') + ')');
+        })
+        .then(function(members) {
+            if (!members) return;
+            document.getElementById('familyList').innerHTML = members.map(function(m) {
+                return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
+                    + '<img class="h-10 w-10 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=e0f2fe&color=0369a1" alt="">'
+                    + '<div><p class="text-sm font-medium text-gray-900">' + m.name + '</p><p class="text-xs text-gray-500">' + m.email + ' • ' + m.role + '</p></div>'
+                    + '</div>';
+            }).join('');
         });
     }
 
     function save() {
         var user = Auth.getUser();
-        if (!user || !user.user_id) {
-            alert('ไม่พบข้อมูลผู้ใช้');
-            return;
-        }
-        var newName = document.getElementById('editName').value.trim();
+        var newName = document.getElementById('editName').value;
         if (!newName) { alert('กรุณากรอกชื่อ'); return; }
-
         Api.update('users', 'user_id=eq.' + user.user_id, { name: newName })
         .then(function() {
             user.name = newName;
             var msg = document.getElementById('profileMsg');
-            if (msg) {
-                msg.textContent = 'บันทึกสำเร็จ!';
-                msg.classList.remove('hidden');
-                setTimeout(function() { msg.classList.add('hidden'); }, 3000);
-            }
-            // อัปเดตข้อมูลบนหน้า
-            var nameEl = document.getElementById('profileName');
-            if (nameEl) nameEl.textContent = newName;
-            var avatarEl = document.getElementById('profileAvatar');
-            if (avatarEl) avatarEl.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(newName) + '&background=0ea5e9&color=fff&size=160';
-        }).catch(function(err) {
-            alert('บันทึกไม่สำเร็จ: ' + err.message);
+            msg.textContent = 'บันทึกสำเร็จ!';
+            msg.classList.remove('hidden');
+            setTimeout(function() { msg.classList.add('hidden'); }, 3000);
+            // อัปเดต nav bar
+            document.getElementById('profileName').textContent = newName;
+            document.getElementById('profileAvatar').src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(newName) + '&background=0ea5e9&color=fff&size=160';
         });
     }
 

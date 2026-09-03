@@ -4,31 +4,16 @@
  */
 var Api = (function() {
 
-    function parseResponse(r, defaultError) {
-        return r.text().then(function(text) {
-            var data = null;
-            if (text && text.trim().length > 0) {
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    data = text;
-                }
-            }
-            if (!r.ok) {
-                var msg = (data && (data.message || data.error || data.details || data.hint))
-                    || (typeof data === 'string' ? data : null)
-                    || (defaultError + ' (' + r.status + ')');
-                throw new Error(msg);
-            }
-            return data;
-        });
-    }
-
     function query(table, params) {
         return fetch(CONFIG.REST + '/' + table + '?' + params, {
             headers: Auth.headers()
         }).then(function(r) {
-            return parseResponse(r, 'API Error');
+            if (!r.ok) throw new Error('API Error: ' + r.status);
+            if (r.status === 204) return [];
+            return r.text().then(function(text) {
+                if (!text || !text.trim()) return [];
+                try { return JSON.parse(text); } catch(e) { return []; }
+            });
         });
     }
 
@@ -42,8 +27,15 @@ var Api = (function() {
         }).then(function(r) {
             var range = r.headers.get('content-range');
             if (range) return parseInt(range.split('/')[1]) || 0;
-            return parseResponse(r, 'Count error').then(function(d) {
-                return Array.isArray(d) ? d.length : 0;
+            if (r.status === 204) return 0;
+            return r.text().then(function(text) {
+                if (!text || !text.trim()) return 0;
+                try {
+                    var d = JSON.parse(text);
+                    return Array.isArray(d) ? d.length : 0;
+                } catch(e) {
+                    return 0;
+                }
             });
         });
     }
@@ -57,7 +49,18 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            return parseResponse(r, 'Insert failed');
+            if (r.status === 204) return null;
+            return r.text().then(function(text) {
+                var data = null;
+                if (text && text.trim()) {
+                    try { data = JSON.parse(text); } catch(e) {}
+                }
+                if (!r.ok) {
+                    var msg = (data && (data.message || data.error || data.details)) || 'Insert failed (' + r.status + ')';
+                    throw new Error(msg);
+                }
+                return data;
+            });
         });
     }
 
@@ -70,7 +73,18 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            return parseResponse(r, 'Update failed');
+            if (r.status === 204) return null;
+            return r.text().then(function(text) {
+                var data = null;
+                if (text && text.trim()) {
+                    try { data = JSON.parse(text); } catch(e) {}
+                }
+                if (!r.ok) {
+                    var msg = (data && (data.message || data.error || data.details)) || 'Update failed (' + r.status + ')';
+                    throw new Error(msg);
+                }
+                return data;
+            });
         });
     }
 
@@ -81,7 +95,18 @@ var Api = (function() {
                 'Prefer': 'return=representation'
             }, Auth.headers())
         }).then(function(r) {
-            return parseResponse(r, 'Delete failed');
+            if (r.status === 204) return null;
+            return r.text().then(function(text) {
+                var data = null;
+                if (text && text.trim()) {
+                    try { data = JSON.parse(text); } catch(e) {}
+                }
+                if (!r.ok) {
+                    var msg = (data && (data.message || data.error || data.details)) || 'Delete failed (' + r.status + ')';
+                    throw new Error(msg);
+                }
+                return data;
+            });
         });
     }
 

@@ -4,12 +4,31 @@
  */
 var Api = (function() {
 
+    function parseResponse(r, defaultError) {
+        return r.text().then(function(text) {
+            var data = null;
+            if (text && text.trim().length > 0) {
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    data = text;
+                }
+            }
+            if (!r.ok) {
+                var msg = (data && (data.message || data.error || data.details || data.hint))
+                    || (typeof data === 'string' ? data : null)
+                    || (defaultError + ' (' + r.status + ')');
+                throw new Error(msg);
+            }
+            return data;
+        });
+    }
+
     function query(table, params) {
         return fetch(CONFIG.REST + '/' + table + '?' + params, {
             headers: Auth.headers()
         }).then(function(r) {
-            if (!r.ok) throw new Error('API Error: ' + r.status);
-            return r.json();
+            return parseResponse(r, 'API Error');
         });
     }
 
@@ -23,7 +42,9 @@ var Api = (function() {
         }).then(function(r) {
             var range = r.headers.get('content-range');
             if (range) return parseInt(range.split('/')[1]) || 0;
-            return r.json().then(function(d) { return Array.isArray(d) ? d.length : 0; });
+            return parseResponse(r, 'Count error').then(function(d) {
+                return Array.isArray(d) ? d.length : 0;
+            });
         });
     }
 
@@ -36,10 +57,7 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            return r.json().then(function(data) {
-                if (!r.ok) throw new Error(data.message || data.error || 'Insert failed (' + r.status + ')');
-                return data;
-            });
+            return parseResponse(r, 'Insert failed');
         });
     }
 
@@ -52,22 +70,18 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            return r.json().then(function(data) {
-                if (!r.ok) throw new Error(data.message || data.error || 'Update failed (' + r.status + ')');
-                return data;
-            });
+            return parseResponse(r, 'Update failed');
         });
     }
 
     function remove(table, params) {
         return fetch(CONFIG.REST + '/' + table + '?' + params, {
             method: 'DELETE',
-            headers: Auth.headers()
+            headers: Object.assign({
+                'Prefer': 'return=representation'
+            }, Auth.headers())
         }).then(function(r) {
-            return r.json().then(function(data) {
-                if (!r.ok) throw new Error(data.message || data.error || 'Delete failed (' + r.status + ')');
-                return data;
-            });
+            return parseResponse(r, 'Delete failed');
         });
     }
 

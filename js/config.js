@@ -7,8 +7,8 @@
  * 📝  คัดลอก js/config.env.example.js -> js/config.env.js แล้วใส่ค่าจริง
  */
 var CONFIG = {
-    SB_URL: 'https://YOUR-PROJECT.supabase.co',
-    SB_KEY: 'YOUR-ANON-KEY',
-    REST: 'https://YOUR-PROJECT.supabase.co/rest/v1',
-    AUTH: 'https://YOUR-PROJECT.supabase.co/auth/v1'
+    SB_URL: 'https://supabase.com/dashboard/project/slnakwquneyczqhxyfqb/settings/general',
+    SB_KEY: 'sb_publishable_ZcoupIGlZythPzwsASQejg_iYNl4jy_',
+    REST: 'https://slnakwquneyczqhxyfqb.supabase.co/rest/v1/',
+    AUTH: 'https://slnakwquneyczqhxyfqb.supabase.co/auth/v1'
 };

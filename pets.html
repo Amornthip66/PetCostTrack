@@ -73,16 +73,16 @@
     <script>
         (function() {
             if (!UI.initPage('pets')) return;
-            Auth.autoLinkUser().then(function() {
-                return Auth.loadProfile();
-            }).then(function() { 
-                Pets.init(); 
-            }).catch(function(err) {
-                console.error('Pets page init error:', err);
-                document.getElementById('petsGrid').innerHTML = 
-                    '<div class="col-span-full text-center py-12 text-red-500">'
-                    + '<i class="fa-solid fa-triangle-exclamation mr-2"></i>'
-                    + 'เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
+
+            // 1. โหลดข้อมูลสัตว์เลี้ยงทันที (รวดเร็ว ไม่ต้องรอ network หลายรอบ)
+            Pets.init();
+
+            // 2. ซิงค์ profile และอัปเดต Navbar เบื้องหลัง
+            Auth.autoLinkUser().finally(function() {
+                return Auth.loadProfile().catch(function() { return null; });
+            }).then(function() {
+                var nav = document.getElementById('mainNav');
+                if (nav) nav.innerHTML = UI.renderNav('pets');
             });
         })();
     </script>

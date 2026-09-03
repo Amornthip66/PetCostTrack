@@ -7,27 +7,61 @@ var Pets = (function() {
     var _pets = [];
 
     function init() {
-        load();
+        return load();
     }
 
     function load() {
+        var grid = document.getElementById('petsGrid');
+        if (grid) {
+            grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลดสัตว์เลี้ยง...</div>';
+        }
+
         var user = Auth.getUser();
-        // Query pet_access first, then pets separately to avoid embedded resource RLS 403
-        return Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + user.user_id)
-        .then(function(access) {
-            if (!access || !access.length) {
-                _pets = [];
-                render();
-                return;
-            }
-            var petIds = access.map(function(a) { return a.pet_id; });
+        var userId = (user && user.user_id) ? user.user_id : null;
+
+        // ดึงข้อมูลสัตว์เลี้ยงทั้งหมดทันทีในคำขอเดียว (รวดเร็วมาก)
+        var petsPromise = Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc');
+        
+        // ดึงสิทธิ์ pet_access คู่ขนานกันเฉพาะกรณีที่มี userId ป้องกัน user_id=eq.undefined
+        var accessPromise = userId 
+            ? Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId).catch(function() { return []; }) 
+            : Promise.resolve([]);
+
+        return Promise.all([petsPromise, accessPromise])
+        .then(function(results) {
+            var pets = results[0] || [];
+            var access = results[1] || [];
             var accessMap = {};
-            access.forEach(function(a) { accessMap[a.pet_id] = a.access_role; });
-            return Api.query('pets', 'select=pet_id,name,type_breed,age&pet_id=in.(' + petIds.join(',') + ')')
+            access.forEach(function(a) { if (a && a.pet_id) accessMap[a.pet_id] = a.access_role; });
+
+            _pets = pets.map(function(p) {
+                return {
+                    pet_id: p.pet_id,
+                    name: p.name,
+                    type_breed: p.type_breed,
+                    age: p.age,
+                    access_role: accessMap[p.pet_id] || (user && user.role ? user.role : 'Owner')
+                };
+            });
+            render();
+        }).catch(function(err) {
+            console.error('Pets load error:', err);
+            // Fallback: หาก query คู่ขนานมีปัญหา ให้ดึงเฉพาะ pets ตารางหลักตรงๆ
+            return Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc')
             .then(function(pets) {
                 _pets = (pets || []).map(function(p) {
-                    return { pet_id: p.pet_id, name: p.name, type_breed: p.type_breed, age: p.age, access_role: accessMap[p.pet_id] };
+                    return {
+                        pet_id: p.pet_id,
+                        name: p.name,
+                        type_breed: p.type_breed,
+                        age: p.age,
+                        access_role: 'Owner'
+                    };
                 });
+                render();
+            }).catch(function(e) {
+                console.error('Fatal load pets error:', e);
+                _pets = [];
                 render();
             });
         });
@@ -35,6 +69,8 @@ var Pets = (function() {
 
     function render() {
         var grid = document.getElementById('petsGrid');
+        if (!grid) return;
+
         if (!_pets.length) {
             grid.innerHTML = '<div class="col-span-full text-center py-12">'
                 + '<i class="fa-solid fa-paw text-4xl text-gray-300 mb-3"></i>'
@@ -81,37 +117,49 @@ var Pets = (function() {
     function save() {
         var id = document.getElementById('formPetId').value;
         var data = {
-            name: document.getElementById('formPetName').value,
-            type_breed: document.getElementById('formPetBreed').value || null,
+            name: document.getElementById('formPetName').value.trim(),
+            type_breed: document.getElementById('formPetBreed').value.trim() || null,
             age: document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null
         };
-        if (!data.name) { alert('กรุณากรอกชื่อ'); return; }
+        if (!data.name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
 
         var promise;
         if (id) {
             promise = Api.update('pets', 'pet_id=eq.' + id, data);
         } else {
             promise = Api.insert('pets', data).then(function(newPet) {
-                // เพิ่ม pet_access record เพื่อเชื่อม user กับ pet
+                var created = Array.isArray(newPet) ? newPet[0] : newPet;
                 var user = Auth.getUser();
-                return Api.insert('pet_access', {
-                    pet_id: newPet.pet_id,
-                    user_id: user.user_id,
-                    access_role: user.role
-                });
+                if (user && user.user_id && created && created.pet_id) {
+                    return Api.insert('pet_access', {
+                        pet_id: created.pet_id,
+                        user_id: user.user_id,
+                        access_role: user.role || 'Owner'
+                    }).catch(function(err) {
+                        console.warn('Could not insert pet_access record:', err);
+                    }).then(function() {
+                        return created;
+                    });
+                }
+                return created;
             });
         }
 
         promise.then(function() {
             closeModal();
             load();
-        }).catch(function(e) { alert('เกิดข้อผิดพลาด: ' + e.message); });
+        }).catch(function(e) {
+            console.error('Save pet error:', e);
+            alert('เกิดข้อผิดพลาด: ' + (e.message || e));
+        });
     }
 
     function remove(petId) {
         if (!confirm('ต้องการลบสัตว์เลี้ยงตัวนี้จริงหรือไม่?')) return;
-        Api.remove('pets', 'pet_id=eq.' + petId).then(function() { load(); });
+        Api.remove('pets', 'pet_id=eq.' + petId)
+            .then(function() { load(); })
+            .catch(function(err) { alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + (err.message || err)); });
     }
 
-    return { init: init, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove };
+    return { init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove };
 })();

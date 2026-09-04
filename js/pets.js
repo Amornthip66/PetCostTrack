@@ -92,11 +92,8 @@ var Pets = (function() {
                 + '<p class="text-sm text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + '</p>'
                 + '<p class="text-sm text-gray-500">' + (p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ') + '</p>'
                 + (isOwner ? '<div class="mt-4 flex gap-2">'
-                    + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 px-3 py-1.5 text-sm text-pet-DEFAULT border border-pet-DEFAULT rounded-lg hover:bg-pet-light transition"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
-                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
-                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-red-500 border border-red-300 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash"></i></button>'
                     + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
-                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
+                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
                     + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash"></i></button>'
                     + '</div>' : '')
                 + '</div></div>';

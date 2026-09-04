@@ -42,17 +42,32 @@ var History = (function() {
     }
 
     function load() {
-        var params = 'select=transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name,category_id),pets(pet_id)&order=expense_date.desc&limit=100';
         var type = document.getElementById('filterType').value;
         var pet = document.getElementById('filterPet').value;
         var cat = document.getElementById('filterCategory').value;
+
+        // เดิม select เรียก pets(...) ซ้ำ 2 ครั้ง (pets(name) และ pets(pet_id) แยกกัน)
+        // ซึ่ง PostgREST ไม่รองรับ join ตารางเดียวกันซ้ำในคำสั่งเดียว ทำให้ query error
+        // (แต่ไม่มี .catch() เลยหน้าค้างที่ "กำลังโหลด..." ตลอดไปแบบเงียบๆ)
+        // รวมเป็น pets(pet_id,name) ที่เดียว และใช้ !inner ตอนกรองเพื่อให้กรองแถวหลักได้จริง
+        var petsJoin = pet ? 'pets!inner(pet_id,name)' : 'pets(pet_id,name)';
+        var catJoin = cat ? 'categories!inner(category_name,category_id)' : 'categories(category_name,category_id)';
+        var params = 'select=transaction_id,amount,expense_date,expense_type,expense_note,'
+            + petsJoin + ',users(name),' + catJoin + '&order=expense_date.desc&limit=100';
+
         if (type) params += '&expense_type=eq.' + encodeURIComponent(type);
         if (pet) params += '&pets.pet_id=eq.' + pet;
         if (cat) params += '&categories.category_id=eq.' + cat;
 
+        var tbody = document.getElementById('historyTable');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+
         Api.query('expenses', params).then(function(data) {
             _expenses = data || [];
             render();
+        }).catch(function(err) {
+            console.error('Load history error:', err);
+            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
         });
     }
 

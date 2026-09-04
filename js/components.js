@@ -21,33 +21,40 @@ var UI = (function() {
             { id: 'profile', label: 'โปรไฟล์', icon: 'fa-user', href: 'profile.html' }
         ];
 
+        // พื้นหลังแถบเมนูเป็นสีเข้ม เลยต้องใช้สีขาว/ม่วงอ่อนสำหรับตัวอักษรและไอคอนทั้งหมด
+        // แทนสีเทาเข้มเดิมที่ใช้ตอนพื้นหลังยังเป็นสีขาว (ไม่งั้นจะมองไม่เห็น/contrast ไม่พอ)
         var navLinks = pages.map(function(p) {
             var cls = p.id === activePage
-                ? 'border-pet-DEFAULT text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium';
+                ? 'border-white text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium'
+                : 'border-transparent text-purple-200 hover:border-purple-300 hover:text-white inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition';
             return '<a href="' + p.href + '" class="' + cls + '">' + p.label + '</a>';
         }).join('');
 
-        return '<nav class="bg-white shadow-sm sticky top-0 z-40">'
+        // Header สีเข้ม (ไม่ใช่ม่วงสด #663399 ตรงๆ) ให้ดูเป็นแดชบอร์ดยุคใหม่ + เส้นขอบล่าง
+        // สีม่วงแบรนด์บางๆ คั่นไว้ให้พอมีสีแบรนด์เชื่อมกับ nav link/ปุ่มที่ยังเป็น #663399
+        return '<nav class="bg-[#1e1030] border-b border-pet-DEFAULT/40 shadow-lg sticky top-0 z-40">'
             + '<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">'
             + '<div class="flex justify-between h-16">'
             + '<div class="flex items-center">'
-            + '<div class="flex-shrink-0 flex items-center text-pet-DEFAULT">'
+            + '<div class="flex-shrink-0 flex items-center text-white">'
             + '<i class="fa-solid fa-paw text-2xl mr-2"></i>'
             + '<span class="font-bold text-xl tracking-wide">PetCostTrack</span>'
             + '</div>'
             + '<div class="hidden sm:ml-8 sm:flex sm:space-x-6">' + navLinks + '</div>'
             + '</div>'
             + '<div class="hidden sm:ml-6 sm:flex sm:items-center gap-3">'
+            + '<a href="profile.html" class="flex items-center rounded-lg px-2 py-1 -mx-2 hover:bg-white/10 transition" title="ไปที่โปรไฟล์ของฉัน">'
             + '<div class="text-right mr-2">'
-            + '<div class="text-sm font-medium text-gray-700">' + userName + '</div>'
-            + '<div class="text-xs text-gray-500">' + userRole + '</div>'
+            + '<div class="text-sm font-medium text-white">' + userName + '</div>'
+            + '<div class="text-xs text-purple-200">' + userRole + '</div>'
             + '</div>'
-            + '<img class="h-10 w-10 rounded-full object-cover border-2 border-pet-DEFAULT" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=0ea5e9&color=fff" alt="Avatar">'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<img class="h-10 w-10 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar">'
+            + '</a>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 px-3 py-1.5 text-sm text-purple-200 hover:text-white hover:bg-white/10 rounded-lg transition" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
-            + '<div class="flex items-center sm:hidden">'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-gray-400 hover:text-red-500"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<div class="flex items-center gap-1 sm:hidden">'
+            + '<a href="profile.html" title="ไปที่โปรไฟล์ของฉัน"><img class="h-8 w-8 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar"></a>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-purple-200 hover:text-white"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
             + '</div></div></nav>';
     }

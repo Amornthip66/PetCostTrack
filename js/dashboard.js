@@ -1,13 +1,18 @@
 /**
  * Dashboard Module
  * โหลดข้อมูล KPI, รายการค่าใช้จ่าย, กราฟ
+ * รองรับการเลือกดูเฉพาะสัตว์เลี้ยงตัวใดตัวหนึ่ง และเลือกเดือน/ปีที่ต้องการดูได้
  */
 var Dashboard = (function() {
+
+    var _pets = [];
+    var _chartInstance = null;
 
     // === Helpers ===
     function fmt(n) { return new Intl.NumberFormat('th-TH').format(n); }
 
     var THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    var THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
     function formatDate(s) {
         var d = new Date(s);
         return d.getDate() + ' ' + THAI_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543);
@@ -25,19 +30,65 @@ var Dashboard = (function() {
         return {i:'fa-receipt',bg:'bg-gray-100',cl:'text-gray-500'};
     }
 
+    // === Filter state (อ่านจาก dropdown/input บนหน้าเว็บ) ===
+    function getFilters() {
+        var petSel = document.getElementById('filterPet');
+        var monthInput = document.getElementById('filterMonth');
+        var petId = petSel ? petSel.value : '';
+        var now = new Date();
+        var year = now.getFullYear(), month = now.getMonth() + 1;
+
+        if (monthInput && monthInput.value) {
+            var parts = monthInput.value.split('-'); // 'YYYY-MM'
+            if (parts.length === 2 && Number(parts[0]) && Number(parts[1])) {
+                year = Number(parts[0]);
+                month = Number(parts[1]);
+            }
+        }
+        return { petId: petId, year: year, month: month };
+    }
+
+    function monthRange(year, month) {
+        var mm = String(month).padStart(2, '0');
+        var mmN = String(month + 1 > 12 ? 1 : month + 1).padStart(2, '0');
+        var yN = month + 1 > 12 ? year + 1 : year;
+        return { start: year + '-' + mm + '-01', end: yN + '-' + mmN + '-01' };
+    }
+
+    function updatePeriodLabel(year, month) {
+        var el = document.getElementById('currentPeriodLabel');
+        if (el) el.textContent = THAI_MONTHS_FULL[month - 1] + ' ' + (year + 543);
+    }
+
+    // === ตัวกรองเปรียบเทียบ (เดือน/ปีที่ผ่านมาที่ต้องการเทียบกับช่วงที่เลือกอยู่) ===
+    function isCompareActive() {
+        var toggle = document.getElementById('compareToggle');
+        return !!(toggle && toggle.checked);
+    }
+
+    // คืนค่า {year, month} ของช่วงที่จะเปรียบเทียบด้วย หรือ null ถ้ายังไม่ได้เปิด/ยังไม่ได้เลือก
+    function getCompareFilters() {
+        if (!isCompareActive()) return null;
+        var input = document.getElementById('filterCompareMonth');
+        if (!input || !input.value) return null;
+        var parts = input.value.split('-'); // 'YYYY-MM'
+        if (parts.length !== 2 || !Number(parts[0]) || !Number(parts[1])) return null;
+        return { year: Number(parts[0]), month: Number(parts[1]) };
+    }
+
     // === KPI Cards ===
     function loadKPIs() {
-        var now = new Date(), month = now.getMonth()+1, year = now.getFullYear();
-        var mm = String(month).padStart(2,'0');
-        var mmN = String(month+1>12?1:month+1).padStart(2,'0');
-        var yN = month+1>12 ? year+1 : year;
+        var f = getFilters();
+        var range = monthRange(f.year, f.month);
+        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
+        updatePeriodLabel(f.year, f.month);
 
         return Promise.all([
-            Api.query('budgets','select=budget_limit&budget_month=eq.'+month+'&budget_year=eq.'+year),
-            Api.query('expenses','select=amount,expense_type&expense_date=gte.'+year+'-'+mm+'-01&expense_date=lt.'+yN+'-'+mmN+'-01'),
+            Api.query('budgets', 'select=budget_limit&budget_month=eq.' + f.month + '&budget_year=eq.' + f.year + petFilter),
+            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter),
             Api.count('pets')
         ]).then(function(r) {
-            var budgets=r[0]||[], expenses=r[1]||[], petCount=r[2]||0;
+            var budgets = r[0] || [], expenses = r[1] || [], petCount = r[2] || 0;
             var totalBudget = budgets.reduce(function(s,b){return s+Number(b.budget_limit);},0);
             var totalSpent = expenses.reduce(function(s,e){return s+Number(e.amount);},0);
             var hiddenCost = expenses.filter(function(e){return e.expense_type==='แฝง';}).reduce(function(s,e){return s+Number(e.amount);},0);
@@ -48,16 +99,24 @@ var Dashboard = (function() {
             document.getElementById('budgetPercent').textContent = percent;
             document.getElementById('budgetTotal').textContent = fmt(totalBudget);
             document.getElementById('petCount').textContent = petCount;
-            document.getElementById('budgetBar').style.width = percent + '%';
+            document.getElementById('budgetBar').style.width = Math.min(percent, 100) + '%';
+        }).catch(function(err) {
+            console.error('Load KPIs error:', err);
         });
     }
 
     // === Expense List ===
     function loadExpenseList() {
+        var f = getFilters();
+        var range = monthRange(f.year, f.month);
+        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
+        var list = document.getElementById('expenseList');
+
         return Api.query('expenses',
-            'select=transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name)&order=expense_date.desc&limit=20')
+            'select=transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name)'
+            + '&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter
+            + '&order=expense_date.desc&limit=20')
         .then(function(data) {
-            var list = document.getElementById('expenseList');
             if (!data || !data.length) {
                 list.innerHTML = '<li class="py-8 text-center text-gray-400 text-sm">ไม่มีรายการ</li>';
                 return;
@@ -77,14 +136,30 @@ var Dashboard = (function() {
                 +'</p><p class="text-xs text-gray-500">'+formatDate(e.expense_date)+' • '+user+' • '+pet+'</p></div></div>'
                 +'<div class="text-right"><p class="text-sm font-bold text-gray-900">฿ '+fmt(e.amount)+'</p></div></li>';
             }).join('');
+        }).catch(function(err) {
+            console.error('Load expense list error:', err);
+            if (list) list.innerHTML = '<li class="py-8 text-center text-red-400 text-sm">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</li>';
         });
     }
 
     // === Chart ===
     function loadChart() {
-        return Api.query('expenses','select=amount,expense_type,categories(category_name)')
+        var f = getFilters();
+        var range = monthRange(f.year, f.month);
+        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
+        var legend = document.getElementById('chartLegend');
+
+        return Api.query('expenses', 'select=amount,expense_type,categories(category_name)&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter)
         .then(function(data) {
-            if (!data||!data.length) return;
+            // ทำลายกราฟเดิมก่อนเสมอ ไม่งั้นเวลาเปลี่ยนตัวกรองจะเกิดกราฟซ้อนทับกันหลายอัน (รวน)
+            if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+
+            var ctx = document.getElementById('expenseChart');
+            if (!data || !data.length) {
+                if (legend) legend.innerHTML = '<p class="text-gray-400 text-sm col-span-2 text-center">ไม่มีข้อมูลค่าใช้จ่ายในช่วงที่เลือก</p>';
+                return;
+            }
+
             var g = {};
             data.forEach(function(e){
                 var c=e.categories&&e.categories.category_name||'อื่นๆ';
@@ -93,38 +168,159 @@ var Dashboard = (function() {
             var labels=Object.keys(g), values=Object.values(g);
             var colors=['#60a5fa','#f87171','#4ade80','#fb923c','#a78bfa','#f472b6','#facc15','#34d399'];
 
-            var ctx = document.getElementById('expenseChart');
             if (!ctx) return;
-            new Chart(ctx.getContext('2d'),{
+            _chartInstance = new Chart(ctx.getContext('2d'),{
                 type:'doughnut',
                 data:{labels:labels,datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderWidth:0,hoverOffset:4}]},
                 options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.label+': '+new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(c.parsed);}}}}}
             });
 
-            var legend = document.getElementById('chartLegend');
             if (legend) {
                 legend.innerHTML=labels.map(function(l,i){
                     return '<div class="flex items-center"><span class="w-3 h-3 rounded-full mr-2" style="background:'+colors[i%colors.length]+'"></span> '+l+'</div>';
                 }).join('');
             }
+        }).catch(function(err) {
+            console.error('Load chart error:', err);
+            if (legend) legend.innerHTML = '<p class="text-red-400 text-sm col-span-2 text-center">โหลดกราฟไม่สำเร็จ</p>';
         });
     }
 
-    // === Pets Dropdown ===
+    // === Pets Dropdown (ทั้งตัวกรองบนหน้า และ dropdown ในฟอร์มเพิ่มรายจ่าย) ===
     function loadPets() {
         return Api.query('pets', 'select=pet_id,name').then(function(pets) {
-            var sel = document.getElementById('formPet');
-            if (!sel) return;
-            if (!pets || !pets.length) { sel.innerHTML = '<option value="">ไม่พบสัตว์เลี้ยง</option>'; return; }
-            sel.innerHTML = pets.map(function(p) {
-                return '<option value="' + p.pet_id + '">' + p.name + '</option>';
-            }).join('');
+            _pets = pets || [];
+
+            var filterSel = document.getElementById('filterPet');
+            if (filterSel) {
+                filterSel.innerHTML = '<option value="">ทุกสัตว์เลี้ยง</option>'
+                    + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('');
+            }
+
+            var formSel = document.getElementById('formPet');
+            if (formSel) {
+                formSel.innerHTML = _pets.length
+                    ? _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('')
+                    : '<option value="">ไม่พบสัตว์เลี้ยง</option>';
+            }
+        }).catch(function(err) {
+            console.error('Load pets error:', err);
         });
+    }
+
+    // === เปรียบเทียบภาพรวมค่าใช้จ่ายกับเดือน/ปีอื่น (ของสัตว์เลี้ยงตัวเดียวกับที่เลือกไว้) ===
+    function summarizeExpenses(data) {
+        var total = data.reduce(function(s, e) { return s + Number(e.amount); }, 0);
+        var hidden = data.filter(function(e) { return e.expense_type === 'แฝง'; })
+            .reduce(function(s, e) { return s + Number(e.amount); }, 0);
+        return { total: total, hidden: hidden, count: data.length };
+    }
+
+    // เทียบ "from" (ช่วงเปรียบเทียบ) กับ "to" (ช่วงที่เลือกอยู่) เป็น % เปลี่ยนแปลง
+    // คืนค่า null ถ้าเทียบไม่ได้ (ช่วงเปรียบเทียบเป็น 0 ทั้งคู่ หรือมีแค่ช่วงเดียวที่เป็น 0)
+    function pctChange(from, to) {
+        if (from === 0) return to === 0 ? 0 : null;
+        return Math.round(((to - from) / from) * 100);
+    }
+
+    function changeBadge(from, to, higherIsBad) {
+        var pct = pctChange(from, to);
+        if (pct === null) return '<span class="text-xs text-gray-400">เทียบไม่ได้ (ช่วงเปรียบเทียบไม่มีข้อมูล)</span>';
+        if (pct === 0) return '<span class="text-xs text-gray-500"><i class="fa-solid fa-minus mr-1"></i>เท่าเดิม</span>';
+        var up = pct > 0;
+        var bad = higherIsBad ? up : !up;
+        var cls = bad ? 'text-red-600' : 'text-green-600';
+        var icon = up ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
+        return '<span class="text-xs font-medium ' + cls + '"><i class="fa-solid ' + icon + ' mr-1"></i>' + Math.abs(pct) + '% ' + (up ? 'เพิ่มขึ้น' : 'ลดลง') + '</span>';
+    }
+
+    function renderComparison(yearA, monthA, dataA, yearB, monthB, dataB) {
+        var content = document.getElementById('compareContent');
+        if (!content) return;
+
+        var a = summarizeExpenses(dataA), b = summarizeExpenses(dataB);
+        var labelA = THAI_MONTHS_FULL[monthA - 1] + ' ' + (yearA + 543);
+        var labelB = THAI_MONTHS_FULL[monthB - 1] + ' ' + (yearB + 543);
+
+        function periodCard(label, s, isSelected) {
+            return '<div class="rounded-lg border ' + (isSelected ? 'border-pet-DEFAULT bg-pet-light/40' : 'border-gray-200') + ' p-4">'
+                + '<p class="text-xs font-medium text-gray-500 mb-1">' + (isSelected ? 'ช่วงที่เลือกดู' : 'ช่วงที่เปรียบเทียบ') + '</p>'
+                + '<p class="text-sm font-semibold text-gray-800 mb-3">' + label + '</p>'
+                + '<p class="text-2xl font-bold text-gray-900">฿ ' + fmt(s.total) + '</p>'
+                + '<p class="text-xs text-gray-500 mt-1">ค่าใช้จ่ายแฝง ฿ ' + fmt(s.hidden) + ' • ' + s.count + ' รายการ</p>'
+                + '</div>';
+        }
+
+        content.innerHTML = periodCard(labelA, a, true) + periodCard(labelB, b, false)
+            + '<div class="sm:col-span-2 flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 mt-1 border-t border-gray-100">'
+            + '<div class="flex items-center gap-2"><span class="text-sm text-gray-500">ยอดรวม:</span>' + changeBadge(b.total, a.total, true) + '</div>'
+            + '<div class="flex items-center gap-2"><span class="text-sm text-gray-500">ค่าใช้จ่ายแฝง:</span>' + changeBadge(b.hidden, a.hidden, true) + '</div>'
+            + '</div>';
+    }
+
+    function loadComparison() {
+        var section = document.getElementById('compareSection');
+        var content = document.getElementById('compareContent');
+        if (!section || !content) return Promise.resolve();
+
+        var compare = getCompareFilters();
+        if (!compare) {
+            section.classList.add('hidden');
+            return Promise.resolve();
+        }
+
+        section.classList.remove('hidden');
+        content.innerHTML = '<div class="col-span-full text-center py-6 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+
+        var f = getFilters();
+        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
+        var rangeA = monthRange(f.year, f.month);
+        var rangeB = monthRange(compare.year, compare.month);
+
+        return Promise.all([
+            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + rangeA.start + '&expense_date=lt.' + rangeA.end + petFilter),
+            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + rangeB.start + '&expense_date=lt.' + rangeB.end + petFilter)
+        ]).then(function(r) {
+            // เช็คซ้ำว่าตอนนี้ toggle/ช่วงเปรียบเทียบยังเป็นอันเดิมที่ query อยู่ไหม (กันกรณีผู้ใช้
+            // เปลี่ยนตัวกรองเร็วมากระหว่างรอ request เก่ายังไม่เสร็จ ไม่ให้ผลลัพธ์เก่ามาทับของใหม่)
+            var current = getCompareFilters();
+            if (!current || current.year !== compare.year || current.month !== compare.month) return;
+            renderComparison(f.year, f.month, r[0] || [], compare.year, compare.month, r[1] || []);
+        }).catch(function(err) {
+            console.error('Load comparison error:', err);
+            content.innerHTML = '<div class="col-span-full text-center py-6 text-red-400">โหลดข้อมูลเปรียบเทียบไม่สำเร็จ: ' + (err.message || err) + '</div>';
+        });
+    }
+
+    // เปิด/ปิดโหมดเปรียบเทียบ (เรียกตอนติ๊ก/เอาติ๊กออกจาก checkbox)
+    function toggleCompare() {
+        var wrap = document.getElementById('compareMonthWrap');
+        var section = document.getElementById('compareSection');
+        var compareInput = document.getElementById('filterCompareMonth');
+
+        if (isCompareActive()) {
+            if (wrap) wrap.classList.remove('hidden');
+            // ถ้ายังไม่เคยเลือกช่วงเปรียบเทียบ ให้ตั้งค่าเริ่มต้นเป็น "เดือนก่อนหน้า" ของช่วงที่เลือกอยู่
+            if (compareInput && !compareInput.value) {
+                var f = getFilters();
+                var prevMonth = f.month - 1, prevYear = f.year;
+                if (prevMonth < 1) { prevMonth = 12; prevYear -= 1; }
+                compareInput.value = prevYear + '-' + String(prevMonth).padStart(2, '0');
+            }
+        } else {
+            if (wrap) wrap.classList.add('hidden');
+            if (section) section.classList.add('hidden');
+        }
+        applyFilters();
+    }
+
+    // === Apply current filters (เรียกตอนเปลี่ยนสัตว์เลี้ยง/เดือนที่ต้องการดู/ตั้งค่าเปรียบเทียบ) ===
+    function applyFilters() {
+        return Promise.all([loadKPIs(), loadExpenseList(), loadChart(), loadComparison()]);
     }
 
     // === Submit Expense ===
     function submitExpense() {
-        var user = Auth.getUser();
         var catId = document.getElementById('formCategory').value;
         var note = document.getElementById('formNote').value;
         var amount = document.getElementById('formAmount').value;
@@ -137,17 +333,27 @@ var Dashboard = (function() {
         }
 
         var hidden = [4,5,6].indexOf(Number(catId))>=0;
-        return Api.insert('expenses',{
-            amount: Number(amount),
-            expense_date: date,
-            expense_type: hidden ? 'แฝง' : 'หลัก',
-            pet_id: Number(petId),
-            user_id: user.user_id,
-            category_id: Number(catId),
-            expense_note: note || null
+
+        // Auth.getUser() อาจยังโหลดไม่เสร็จถ้ากดบันทึกเร็วมาก ต้องรอ loadProfile()
+        // ซ้ำถ้ายังไม่มี user แทนที่จะพังเงียบๆ ตอนอ่าน user.user_id
+        var userPromise = Auth.getUser() ? Promise.resolve(Auth.getUser()) : Auth.loadProfile();
+
+        return userPromise.then(function(user) {
+            return Api.insert('expenses',{
+                amount: Number(amount),
+                expense_date: date,
+                expense_type: hidden ? 'แฝง' : 'หลัก',
+                pet_id: Number(petId),
+                user_id: user.user_id,
+                category_id: Number(catId),
+                expense_note: note || null
+            });
         }).then(function() {
             closeModal();
-            return Promise.all([loadKPIs(), loadExpenseList(), loadChart()]);
+            return applyFilters();
+        }).catch(function(err) {
+            console.error('Submit expense error:', err);
+            alert('บันทึกรายจ่ายไม่สำเร็จ: ' + (err.message || err));
         });
     }
 
@@ -157,7 +363,20 @@ var Dashboard = (function() {
 
     // === Init ===
     function init() {
-        return Promise.all([loadKPIs(), loadExpenseList(), loadChart(), loadPets()]);
+        var now = new Date();
+        var currentYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+        // ตั้งค่าตัวกรองเดือนเริ่มต้นเป็นเดือนปัจจุบัน (ถ้ายังไม่ได้เลือกอะไรไว้)
+        var monthInput = document.getElementById('filterMonth');
+        if (monthInput && !monthInput.value) monthInput.value = currentYm;
+
+        // ช่วงเปรียบเทียบเลือกได้แค่ "เดือนที่ผ่านมาแล้ว" เท่านั้น (ไม่ให้เทียบกับอนาคต)
+        var compareInput = document.getElementById('filterCompareMonth');
+        if (compareInput) compareInput.max = currentYm;
+
+        return loadPets().then(function() {
+            return applyFilters();
+        });
     }
 
     return {
@@ -166,6 +385,8 @@ var Dashboard = (function() {
         loadExpenseList: loadExpenseList,
         loadChart: loadChart,
         loadPets: loadPets,
+        applyFilters: applyFilters,
+        toggleCompare: toggleCompare,
         submitExpense: submitExpense,
         openModal: openModal,
         closeModal: closeModal

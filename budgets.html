@@ -9,8 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }</script>
-    <style>body { background-color: #f8fafc; }</style>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }</script>
+    <link rel="stylesheet" href="style.css">
+    <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -23,6 +24,31 @@
             </div>
             <button onclick="Budgets.openModal()" class="px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition flex items-center">
                 <i class="fa-solid fa-plus mr-2"></i> ตั้งงบใหม่
+            </button>
+        </div>
+
+        <!-- Filters: เลือกสัตว์เลี้ยง / เดือน / ปี ที่ต้องการดูงบประมาณ -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-end">
+            <div>
+                <label for="filterPet" class="block text-xs font-medium text-gray-500 mb-1">สัตว์เลี้ยง</label>
+                <select id="filterPet" onchange="Budgets.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                    <option value="">ทุกสัตว์เลี้ยง</option>
+                </select>
+            </div>
+            <div>
+                <label for="filterMonth" class="block text-xs font-medium text-gray-500 mb-1">เดือน</label>
+                <select id="filterMonth" onchange="Budgets.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                    <option value="">ทุกเดือน</option>
+                </select>
+            </div>
+            <div>
+                <label for="filterYear" class="block text-xs font-medium text-gray-500 mb-1">ปี</label>
+                <select id="filterYear" onchange="Budgets.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                    <option value="">ทุกปี</option>
+                </select>
+            </div>
+            <button onclick="Budgets.clearFilters()" class="ml-auto px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+                <i class="fa-solid fa-rotate-left mr-1"></i> ล้างตัวกรอง
             </button>
         </div>
 
@@ -64,10 +90,16 @@
     <script>
         (function() {
             if (!UI.initPage('budgets')) return;
+
+            // โหลดงบประมาณทันที ไม่ต้องรอ auto-link/โปรไฟล์ผู้ใช้ก่อน (เหมือนหน้า History)
+            Budgets.init();
+
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { Budgets.init(); })
-            .catch(function(err) {
+            }).then(function() {
+                var nav = document.getElementById('mainNav');
+                if (nav) nav.innerHTML = UI.renderNav('budgets');
+            }).catch(function(err) {
                 console.error('Budgets page init error:', err);
             });
         })();

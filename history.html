@@ -22,27 +22,27 @@
                 <h1 class="text-2xl font-bold text-gray-900">ประวัติรายจ่าย</h1>
                 <p class="text-sm text-gray-500 mt-1">รายการค่าใช้จ่ายทั้งหมดของสัตว์เลี้ยง</p>
             </div>
-            <button onclick="History.openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition">
+            <button onclick="History.openModal()" class="px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition flex items-center">
                 <i class="fa-solid fa-plus mr-2"></i> เพิ่มรายจ่าย
             </button>
         </div>
 
         <!-- Filters -->
         <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
-            <select id="filterType" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterType" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกประเภท</option>
                 <option value="หลัก">ค่าใช้จ่ายปกติ</option>
                 <option value="แฝง">ค่าใช้จ่ายแฝง</option>
             </select>
-            <select id="filterPet" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterPet" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกสัตว์เลี้ยง</option>
             </select>
-            <select id="filterCategory" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterCategory" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกหมวดหมู่</option>
             </select>
             <div class="flex items-center gap-2 ml-auto">
                 <span class="text-sm text-gray-500">ยอดรวม:</span>
-                <span id="totalFiltered" class="text-lg font-bold text-pet-DEFAULT">฿ 0</span>
+                <span id="totalFiltered" class="text-lg font-bold text-pet">฿ 0</span>
             </div>
         </div>
 
@@ -79,22 +79,22 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">หมวดหมู่ <span class="text-red-500">*</span></label>
-                            <select id="formCategory" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            <select id="formCategory" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                                 <optgroup label="รายจ่ายปกติ"><option value="1">ค่าอาหาร</option><option value="2">ค่าวัคซีน/ตรวจสุขภาพ</option><option value="3">ถ่ายพยาธิ</option></optgroup>
                                 <optgroup label="ค่าใช้จ่ายแฝง"><option value="4" selected>ค่ารักษาพยาบาลฉุกเฉิน</option><option value="5">ค่าซ่อมแซมสิ่งของเสียหาย</option><option value="6">ค่าฝากเลี้ยง</option></optgroup>
                             </select>
                         </div>
-                        <div><label class="block text-sm font-medium text-gray-700">รายการ</label><input id="formNote" type="text" placeholder="รายละเอียด" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">รายการ</label><input id="formNote" type="text" placeholder="รายละเอียด" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" placeholder="0.00" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
-                            <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" placeholder="0.00" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         </div>
-                        <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"><option value="">กำลังโหลด...</option></select></div>
+                        <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                    <button onclick="History.submit()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">บันทึก</button>
-                    <button onclick="History.closeModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:mt-0">ยกเลิก</button>
+                    <button onclick="History.submit()" class="w-full sm:w-auto sm:ml-3 btn btn-primary">บันทึก</button>
+                    <button onclick="History.closeModal()" class="mt-3 w-full sm:w-auto sm:mt-0 btn btn-secondary">ยกเลิก</button>
                 </div>
             </div>
         </div>
@@ -103,7 +103,7 @@
     <script src="js/config.env.js"></script>
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
-    <script src="js/components.js?v=20260905"></script>
+    <script src="js/components.js"></script>
     <script src="js/history.js"></script>
     <script>
         (function() {

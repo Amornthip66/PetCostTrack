@@ -40,7 +40,7 @@ var UI = (function() {
 
         // Header สีเข้ม (ไม่ใช่ม่วงสด #663399 ตรงๆ) ให้ดูเป็นแดชบอร์ดยุคใหม่ + เส้นขอบล่าง
         // สีม่วงแบรนด์บางๆ คั่นไว้ให้พอมีสีแบรนด์เชื่อมกับ nav link/ปุ่มที่ยังเป็น #663399
-        return '<nav class="bg-[#1e1030] border-b border-pet-DEFAULT/40 shadow-lg sticky top-0 z-40">'
+        return '<nav class="bg-[#1e1030] border-b border-pet/40 shadow-lg sticky top-0 z-40">'
             + '<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">'
             + '<div class="flex justify-between h-16">'
             + '<div class="flex items-center">'
@@ -58,16 +58,11 @@ var UI = (function() {
             + '</div>'
             + '<img class="h-10 w-10 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar">'
             + '</a>'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 px-3 py-1.5 text-sm text-purple-200 hover:text-white hover:bg-white/10 rounded-lg transition" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 btn btn-nav btn-sm" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
             + '<div class="flex items-center gap-1 sm:hidden">'
             + '<a href="profile.html" title="ไปที่โปรไฟล์ของฉัน"><img class="h-8 w-8 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar"></a>'
-            + '<button onclick="UI.toggleMobileNav()" id="mobileNavToggle" class="p-2 text-purple-200 hover:text-white" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="mobileNavPanel"><i class="fa-solid fa-bars text-lg"></i></button>'
-            + '</div>'
-            + '</div>'
-            + '<div id="mobileNavPanel" class="hidden sm:hidden border-t border-pet-DEFAULT/40 px-2 pt-2 pb-3 space-y-1">'
-            + mobileNavLinks
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="w-full flex items-center gap-3 px-3 py-2.5 mt-1 pt-3 border-t border-white/10 rounded-lg text-purple-200 hover:bg-white/10 hover:text-white text-sm font-medium transition"><i class="fa-solid fa-right-from-bracket w-5 text-center"></i>ออกจากระบบ</button>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-purple-200 hover:text-white"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
             + '</div></nav>';
     }

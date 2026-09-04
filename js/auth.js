@@ -18,18 +18,19 @@ var Auth = (function() {
     }
 
     // === Session Management ===
+    function isAccessExpired(s) {
+        // ตรวจสอบว่า access token หมดอายุหรือยัง (เทียบกับ expires_at)
+        return !!(s && s.expires_at && Math.floor(Date.now() / 1000) > s.expires_at);
+    }
+
     function getSession() {
         if (_session) return _session;
         var raw = localStorage.getItem('sb_session');
         if (raw) {
-            _session = JSON.parse(raw);
-            // ตรวจสอบว่า token หมดอายุหรือยัง
-            if (_session && _session.expires_at) {
-                var now = Math.floor(Date.now() / 1000);
-                if (now > _session.expires_at) {
-                    clearSession();
-                    return null;
-                }
+            try {
+                _session = JSON.parse(raw);
+            } catch (e) {
+                _session = null;
             }
         }
         return _session;
@@ -50,15 +51,70 @@ var Auth = (function() {
         localStorage.removeItem('sb_session');
     }
 
+    // === Token Refresh ===
+    // กันการเรียก refresh พร้อมกันหลายครั้ง (single-flight)
+    // ไม่งั้น refresh token ถูก rotate หลายรอบพร้อมกันจน token เพี้ยนได้
+    var _refreshing = null;
+
+    function refreshSession() {
+        if (_refreshing) return _refreshing;
+
+        var raw = localStorage.getItem('sb_session');
+        var s = null;
+        if (raw) {
+            try { s = JSON.parse(raw); } catch (e) { s = null; }
+        }
+        if (!s || !s.refresh_token) return Promise.resolve(null);
+
+        _refreshing = fetch(CONFIG.AUTH + '/token?grant_type=refresh_token', {
+            method: 'POST',
+            headers: {
+                'apikey': CONFIG.SB_KEY,
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + s.refresh_token
+            },
+            body: JSON.stringify({ refresh_token: s.refresh_token })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok || !data || !data.access_token) {
+                    clearSession();
+                    return null;
+                }
+                saveSession(data);
+                return getSession();
+            });
+        }).catch(function(err) {
+            console.warn('Session refresh failed:', err);
+            return null;
+        }).then(function(result) {
+            _refreshing = null;
+            return result;
+        });
+        return _refreshing;
+    }
+
+    // ตรวจสอบ/ต่ออายุ session ให้ใช้ได้ก่อนส่ง request เสมอ
+    // - session ยังไม่หมดอายุ → คืน session เดิมทันที
+    // - หมดอายุแต่ยังมี refresh token → พยายามต่ออายุ แล้วคืน session ใหม่
+    // - ต่ออายุไม่ได้ / ไม่มี session เลย → คืน null
+    function ensureSession() {
+        var s = getSession();
+        if (s && !isAccessExpired(s)) return Promise.resolve(s);
+        return refreshSession();
+    }
+
     function isLoggedIn() {
-        return !!getSession();
+        var s = getSession();
+        return !!s && !isAccessExpired(s);
     }
 
     // === Auth Headers ===
     function headers() {
         var h = { 'apikey': CONFIG.SB_KEY };
         var s = getSession();
-        if (s && s.access_token) {
+        // ถ้า token หมดอายุแล้ว อย่าส่ง Authorization (server จะตอบ 401)
+        // Api จะเรียก ensureSession() เพื่อต่ออายุให้ก่อนส่ง request จริง
+        if (s && s.access_token && !isAccessExpired(s)) {
             h['Authorization'] = 'Bearer ' + s.access_token;
         }
         return h;
@@ -219,17 +275,34 @@ var Auth = (function() {
 
     // === Redirect ===
     function requireAuth() {
-        if (!isLoggedIn()) {
-            window.location.href = 'login.html';
-            return false;
+        if (isLoggedIn()) return true;
+
+        // access token หมดอายุ แต่ยังมี refresh token → ลองต่ออายุอัตโนมัติ
+        // (สำเร็จหน้าเว็บทำงานต่อได้เลย, ไม่สำเร็จค่อยพาไปหน้า login)
+        var raw = localStorage.getItem('sb_session');
+        if (raw) {
+            refreshSession().then(function(s) {
+                if (!s) window.location.href = 'login.html';
+            });
+            return true;
         }
-        return true;
+
+        window.location.href = 'login.html';
+        return false;
     }
 
     function redirectIfLoggedIn() {
         if (isLoggedIn()) {
             window.location.href = 'index.html';
             return true;
+        }
+
+        // token หมดอายุ → ลองต่ออายุเงียบๆ ถ้าสำเร็จพาเข้าแอปต่อได้เลย
+        var raw = localStorage.getItem('sb_session');
+        if (raw) {
+            refreshSession().then(function(s) {
+                if (s) window.location.href = 'index.html';
+            });
         }
         return false;
     }
@@ -257,6 +330,8 @@ var Auth = (function() {
         saveSession: saveSession,
         clearSession: clearSession,
         isLoggedIn: isLoggedIn,
+        refreshSession: refreshSession,
+        ensureSession: ensureSession,
         headers: headers,
         signup: signup,
         login: login,

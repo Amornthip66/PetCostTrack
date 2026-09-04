@@ -105,20 +105,16 @@ var Api = (function() {
         });
     }
 
-    // อัปโหลดไฟล์ไปที่ Supabase Storage แล้วคืนค่า public URL กลับมา
-    // (bucket ต้องตั้งเป็น public และมี RLS policy อนุญาต insert ไว้แล้ว)
-    function uploadFile(bucket, path, file) {
-        return fetch(CONFIG.SB_URL + '/storage/v1/object/' + bucket + '/' + path, {
+    function rpc(fn, params) {
+        return fetch(CONFIG.REST + '/rpc/' + fn, {
             method: 'POST',
             headers: Object.assign({
-                'Content-Type': file.type || 'application/octet-stream',
-                'x-upsert': 'true'
+                'Content-Type': 'application/json'
             }, Auth.headers()),
-            body: file
+            body: JSON.stringify(params || {})
         }).then(function(r) {
             return safeParse(r).then(function(data) {
-                throwIfHttpError(r, data, 'Upload');
-                return CONFIG.SB_URL + '/storage/v1/object/public/' + bucket + '/' + path;
+                return throwIfHttpError(r, data, 'RPC ' + fn);
             });
         });
     }
@@ -129,6 +125,6 @@ var Api = (function() {
         insert: insert,
         update: update,
         remove: remove,
-        uploadFile: uploadFile
+        rpc: rpc
     };
 })();

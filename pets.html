@@ -12,7 +12,15 @@
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }
     </script>
-    <style>body { background-color: #f8fafc; }</style>
+    <link rel="stylesheet" href="style.css?v=20260905">
+<<<<<<<<< Temporary merge branch 1
+    <style>
+        :root { --pet: #0ea5e9; --pet-dark: #0369a1; --pet-light: #e0f2fe; }
+        body { background-color: #f8fafc; }
+    </style>
+=========
+    <style>body { background-color: #f8f6fb; }</style>
+>>>>>>>>> Temporary merge branch 2
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -23,7 +31,11 @@
                 <h1 class="text-2xl font-bold text-gray-900">สัตว์เลี้ยงของฉัน</h1>
                 <p class="text-sm text-gray-500 mt-1">จัดการสัตว์เลี้ยงที่คุณดูแล</p>
             </div>
-            <button onclick="Pets.openModal()" class="px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition flex items-center">
+<<<<<<<<< Temporary merge branch 1
+            <button onclick="Pets.openModal()" class="btn btn-primary">
+=========
+            <button onclick="Pets.openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition">
+>>>>>>>>> Temporary merge branch 2
                 <i class="fa-solid fa-plus mr-2"></i> เพิ่มสัตว์เลี้ยง
             </button>
         </div>
@@ -130,11 +142,19 @@
         </div>
     </div>
 
+<<<<<<<<< Temporary merge branch 1
+    <script src="js/config.env.js?v=20260905"></script>
+    <script src="js/api.js?v=20260905"></script>
+    <script src="js/auth.js?v=20260905"></script>
+    <script src="js/components.js?v=20260905"></script>
+    <script src="js/pets.js?v=20260905"></script>
+=========
     <script src="js/config.env.js"></script>
     <script src="js/api.js?v=3"></script>
     <script src="js/auth.js?v=2"></script>
-    <script src="js/components.js"></script>
+    <script src="js/components.js?v=20260905"></script>
     <script src="js/pets.js?v=3"></script>
+>>>>>>>>> Temporary merge branch 2
     <script>
         (function() {
             if (!UI.initPage('pets')) return;

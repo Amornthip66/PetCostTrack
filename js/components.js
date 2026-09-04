@@ -62,7 +62,13 @@ var UI = (function() {
             + '</div>'
             + '<div class="flex items-center gap-1 sm:hidden">'
             + '<a href="profile.html" title="ไปที่โปรไฟล์ของฉัน"><img class="h-8 w-8 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar"></a>'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-purple-200 hover:text-white"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<button onclick="UI.toggleMobileNav()" id="mobileNavToggle" class="p-2 text-purple-200 hover:text-white" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="mobileNavPanel"><i class="fa-solid fa-bars text-lg"></i></button>'
+            + '</div>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="btn btn-nav btn-sm"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '</div>'
+            + '<div id="mobileNavPanel" class="hidden sm:hidden border-t border-pet-DEFAULT/40 px-2 pt-2 pb-3 space-y-1">'
+            + mobileNavLinks
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="w-full flex items-center gap-3 px-3 py-2.5 mt-1 pt-3 border-t border-white/10 rounded-lg text-purple-200 hover:bg-white/10 hover:text-white text-sm font-medium transition"><i class="fa-solid fa-right-from-bracket w-5 text-center"></i>ออกจากระบบ</button>'
             + '</div>'
             + '</div></nav>';
     }

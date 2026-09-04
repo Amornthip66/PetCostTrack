@@ -51,7 +51,7 @@
             </div>
             <div class="mt-6 flex gap-3">
                 <button onclick="Profile.save()" class="px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition">บันทึกการแก้ไข</button>
-                <button onclick="Profile.changePassword()" class="px-5 py-2.5 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition">เปลี่ยนรหัสผ่าน</button>
+                <button onclick="Profile.changePassword()" class="px-5 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition">เปลี่ยนรหัสผ่าน</button>
             </div>
             <p id="profileMsg" class="text-green-600 text-sm mt-3 hidden"></p>
         </div>
@@ -60,7 +60,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-800">สมาชิกในครอบครัว</h3>
-                <button onclick="Profile.openInviteModal()" class="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition"><i class="fa-solid fa-user-plus mr-1"></i>เพิ่มสมาชิกในครอบครัว</button>
+                <button onclick="Profile.openInviteModal()" class="px-3 py-1.5 text-sm bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition"><i class="fa-solid fa-user-plus mr-1"></i>เพิ่มสมาชิกในครอบครัว</button>
             </div>
             <div id="familyList" class="text-gray-400 text-sm">กำลังโหลด...</div>
         </div>
@@ -89,8 +89,8 @@
                     <p id="inviteMsg" class="text-red-500 text-sm mt-3 hidden"></p>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                    <button onclick="Profile.addFamilyMember()" class="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition sm:ml-3">เชิญสมาชิก</button>
-                    <button onclick="Profile.closeInviteModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 sm:mt-0">ยกเลิก</button>
+                    <button onclick="Profile.addFamilyMember()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">เชิญสมาชิก</button>
+                    <button onclick="Profile.closeInviteModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:mt-0">ยกเลิก</button>
                 </div>
             </div>
         </div>

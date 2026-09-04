@@ -9,8 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }</script>
-    <style>body { background-color: #f8fafc; }</style>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }</script>
+    <link rel="stylesheet" href="style.css">
+    <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -20,7 +21,7 @@
 
         <!-- Profile Card -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-            <div class="h-24 bg-gradient-to-r from-pet-DEFAULT to-sky-400"></div>
+            <div class="h-24 bg-gradient-to-r from-pet-DEFAULT to-purple-400"></div>
             <div class="px-6 pb-6">
                 <div class="flex items-end gap-4 -mt-10">
                     <img id="profileAvatar" class="h-20 w-20 rounded-full object-cover border-4 border-white shadow" src="" alt="Avatar">
@@ -56,6 +57,20 @@
             <p id="profileMsg" class="text-green-600 text-sm mt-3 hidden"></p>
         </div>
 
+        <!-- Owned Pets -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800">สัตว์เลี้ยงที่เป็นเจ้าของ</h3>
+                    <p class="text-3xl font-bold text-gray-900 mt-1"><span id="ownedPetCount">—</span> ตัว</p>
+                </div>
+                <div class="p-3 bg-amber-100 rounded-full text-amber-500"><i class="fa-solid fa-dog text-xl"></i></div>
+            </div>
+            <a href="pets.html" class="mt-4 inline-flex items-center text-sm font-medium text-pet-DEFAULT hover:text-pet-dark transition">
+                ดูรายละเอียด <i class="fa-solid fa-arrow-right ml-1.5 text-xs"></i>
+            </a>
+        </div>
+
         <!-- Family Members -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-4">สมาชิกในครอบครัว</h3>
@@ -63,11 +78,11 @@
         </div>
     </main>
 
-    <script src="js/config.env.js?v=2.2"></script>
-    <script src="js/api.js?v=2.2"></script>
-    <script src="js/auth.js?v=2.2"></script>
-    <script src="js/components.js?v=2.2"></script>
-    <script src="js/profile.js?v=2.2"></script>
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/profile.js"></script>
     <script>
         (function() {
             if (!UI.initPage('profile')) return;
@@ -76,6 +91,8 @@
             }).then(function() { Profile.init(); })
             .catch(function(err) {
                 console.error('Profile page init error:', err);
+                var familyList = document.getElementById('familyList');
+                if (familyList) familyList.innerHTML = '<p class="text-red-400">โหลดโปรไฟล์ไม่สำเร็จ กรุณารีเฟรชหน้าใหม่</p>';
             });
         })();
     </script>

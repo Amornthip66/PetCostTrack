@@ -6,6 +6,17 @@ var Auth = (function() {
     var _session = null;
     var _user = null;
 
+    // อ่าน response เป็น JSON อย่างปลอดภัยเสมอ: ห้ามเรียก r.json() ตรงๆ เด็ดขาด
+    // เพราะถ้า body ว่างเปล่า (204, RPC ที่คืนค่า VOID ฯลฯ) r.json() จะโยน
+    // error "Unexpected end of JSON input" ทันที แม้ header จะบอกว่าเป็น application/json ก็ตาม
+    function safeJson(r) {
+        if (r.status === 204) return Promise.resolve(null);
+        return r.text().then(function(text) {
+            if (!text || !text.trim()) return null;
+            try { return JSON.parse(text); } catch (e) { return null; }
+        });
+    }
+
     // === Session Management ===
     function getSession() {
         if (_session) return _session;
@@ -63,7 +74,15 @@ var Auth = (function() {
             method: 'POST',
             headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) {
+                    var msg = (data && (data.msg || data.message || data.error_description)) || 'Signup failed (' + r.status + ')';
+                    throw new Error(msg);
+                }
+                return data;
+            });
+        });
     }
 
     function login(email, password) {
@@ -71,7 +90,15 @@ var Auth = (function() {
             method: 'POST',
             headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, password: password })
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) {
+                    var msg = (data && (data.msg || data.message || data.error_description)) || 'Login failed (' + r.status + ')';
+                    throw new Error(msg);
+                }
+                return data;
+            });
+        });
     }
 
     function logout() {
@@ -89,11 +116,23 @@ var Auth = (function() {
     }
 
     // === User Profile ===
+    // JWT ใช้ Base64URL (มีตัวอักษร - และ _ แทน + และ / และไม่มี padding =)
+    // atob() มาตรฐานรองรับแค่ Base64 ปกติ ถ้าเจอ - หรือ _ จะ throw error ทันที
+    // ต้องแปลงเป็น Base64 ปกติ + เติม padding ก่อนค่อยส่งให้ atob()
+    function base64UrlDecode(str) {
+        str = str.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) { str += '='; }
+        return atob(str);
+    }
+
     function getAuthUserId() {
         var s = getSession();
-        if (!s || !s.access_token) return null;
+        if (!s) return null;
+        // ใช้ user.id จาก session ตรงๆ ก่อน (แม่นยำและเร็วกว่าการถอด JWT เอง)
+        if (s.user && s.user.id) return s.user.id;
+        if (!s.access_token) return null;
         try {
-            var payload = JSON.parse(atob(s.access_token.split('.')[1]));
+            var payload = JSON.parse(base64UrlDecode(s.access_token.split('.')[1]));
             return payload.sub;
         } catch(e) {
             return null;
@@ -204,12 +243,9 @@ var Auth = (function() {
             }, headers())
         }).then(function(r) {
             if (!r.ok) throw new Error('auto_link_user failed: ' + r.status);
-            // auto_link_user returns VOID — response body is empty
-            var ct = r.headers.get('content-type') || '';
-            if (ct.indexOf('application/json') >= 0) {
-                return r.json();
-            }
-            return null;
+            // auto_link_user คืนค่า VOID — ใช้ safeJson แทน r.json() ตรงๆ
+            // เพราะบาง server ติด header content-type: application/json มาทั้งที่ body ว่างเปล่าจริง
+            return safeJson(r);
         }).catch(function(err) {
             console.warn('auto_link_user failed (non-critical):', err);
         });

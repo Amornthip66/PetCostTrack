@@ -12,10 +12,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         tailwind.config = {
-            theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } }
+            theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } }
         }
     </script>
-    <style>body { background-color: #f8fafc; }</style>
+    <link rel="stylesheet" href="style.css">
+    <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
 
@@ -27,11 +28,41 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">ภาพรวมค่าใช้จ่าย</h1>
-                <p class="text-sm text-gray-500 mt-1">ประจำเดือน: <span class="font-semibold text-gray-700">สิงหาคม 2569</span></p>
+                <p class="text-sm text-gray-500 mt-1">ประจำเดือน: <span id="currentPeriodLabel" class="font-semibold text-gray-700">—</span></p>
             </div>
             <button onclick="Dashboard.openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-pet-DEFAULT hover:bg-pet-dark transition-colors">
                 <i class="fa-solid fa-plus mr-2"></i> เพิ่มรายจ่ายใหม่
             </button>
+        </div>
+
+        <!-- Filters: เลือกสัตว์เลี้ยง / เดือนที่ต้องการดู / เปรียบเทียบกับเดือนอื่น -->
+        <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-end">
+            <div>
+                <label for="filterPet" class="block text-xs font-medium text-gray-500 mb-1">สัตว์เลี้ยง</label>
+                <select id="filterPet" onchange="Dashboard.applyFilters()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                    <option value="">ทุกสัตว์เลี้ยง</option>
+                </select>
+            </div>
+            <div>
+                <label for="filterMonth" class="block text-xs font-medium text-gray-500 mb-1">เดือน/ปี</label>
+                <input id="filterMonth" type="month" onchange="Dashboard.applyFilters()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            </div>
+            <div class="flex items-center gap-2 pb-2">
+                <input id="compareToggle" type="checkbox" onchange="Dashboard.toggleCompare()" class="h-4 w-4 rounded border-gray-300 text-pet-DEFAULT focus:ring-pet-DEFAULT cursor-pointer">
+                <label for="compareToggle" class="text-sm text-gray-700 select-none cursor-pointer">เปรียบเทียบกับเดือนที่ผ่านมา</label>
+            </div>
+            <div id="compareMonthWrap" class="hidden">
+                <label for="filterCompareMonth" class="block text-xs font-medium text-gray-500 mb-1">เทียบกับเดือน/ปี</label>
+                <input id="filterCompareMonth" type="month" onchange="Dashboard.applyFilters()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            </div>
+        </div>
+
+        <!-- Compare Section: แสดงเมื่อเปิดใช้ "เปรียบเทียบกับเดือนที่ผ่านมา" -->
+        <div id="compareSection" class="hidden bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-100">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">เปรียบเทียบภาพรวมค่าใช้จ่าย</h3>
+            <div id="compareContent" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="col-span-full text-center py-6 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>
+            </div>
         </div>
 
         <!-- KPI Cards -->
@@ -104,7 +135,7 @@
                             <div class="mt-4 space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">หมวดหมู่ <span class="text-red-500">*</span></label>
-                                    <select id="formCategory" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 bg-gray-50 rounded-md border">
+                                    <select id="formCategory" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
                                         <optgroup label="รายจ่ายปกติ">
                                             <option value="1">ค่าอาหาร</option>
                                             <option value="2">ค่าวัคซีน/ตรวจสุขภาพ</option>
@@ -133,7 +164,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label>
-                                    <select id="formPet" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 bg-gray-50 rounded-md border">
+                                    <select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
                                         <option value="">กำลังโหลด...</option>
                                     </select>
                                 </div>
@@ -150,11 +181,11 @@
     </div>
 
     <!-- ====== SCRIPTS ====== -->
-    <script src="js/config.env.js?v=2.2"></script>
-    <script src="js/api.js?v=2.2"></script>
-    <script src="js/auth.js?v=2.2"></script>
-    <script src="js/components.js?v=2.2"></script>
-    <script src="js/dashboard.js?v=2.2"></script>
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/dashboard.js"></script>
     <script>
         // === Auth Callback: จัดการ redirect จาก Supabase ===
         (function() {
@@ -194,30 +225,24 @@
         (function() {
             if (!UI.initPage('dashboard')) return;
 
-            // Auto-link user กับ seed data ก่อนโหลด profile
-            Auth.autoLinkUser().then(function() {
-                return Auth.loadProfile();
-            }).catch(function(err) {
-                console.warn('Profile link warning:', err);
-                return Auth.loadProfile();
-            }).then(function(user) {
-                // อัปเดต Navbar หลังโหลด profile สำเร็จ
+            // ต้อง auto-link + โหลดโปรไฟล์ให้เสร็จก่อนค่อย init เพราะ RLS ของ Supabase
+            // กรองข้อมูลตาม auth_user_id() (อ่านจาก users.auth_id = auth.uid())
+            // ถ้ายังไม่ได้ link บัญชีกับแถว users ก่อน ค่า auth_user_id() จะเป็น NULL
+            // ทำให้ query ไม่เห็นข้อมูลของตัวเองเลย (หรือเห็นหมดทุกคน ถ้า policy เก่ายังไม่โดนแก้)
+            Auth.autoLinkUser().finally(function() {
+                return Auth.loadProfile().catch(function() { return null; });
+            }).then(function() {
                 var nav = document.getElementById('mainNav');
                 if (nav) nav.innerHTML = UI.renderNav('dashboard');
 
-                // ตั้งค่าวันที่ปัจจุบันในฟอร์ม
+                // ตั้งค่าวันที่ปัจจุบันในฟอร์มเพิ่มรายจ่าย
                 var today = new Date();
                 var dateInput = document.getElementById('formDate');
                 if (dateInput) dateInput.value = today.toISOString().split('T')[0];
 
-                // โหลดข้อมูล dashboard
                 return Dashboard.init();
             }).catch(function(err) {
-                console.error('Init error in dashboard:', err);
-                // พยายามโหลด Dashboard แม้จะมี warning
-                Dashboard.init().catch(function(e) {
-                    console.error('Dashboard init failed:', e);
-                });
+                console.error('Init error in dashboard (profile link):', err);
             });
         })();
     </script>

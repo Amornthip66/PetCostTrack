@@ -42,17 +42,32 @@ var History = (function() {
     }
 
     function load() {
-        var params = 'select=transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name,category_id),pets(pet_id)&order=expense_date.desc&limit=100';
         var type = document.getElementById('filterType').value;
         var pet = document.getElementById('filterPet').value;
         var cat = document.getElementById('filterCategory').value;
+
+        // เดิม select เรียก pets(...) ซ้ำ 2 ครั้ง (pets(name) และ pets(pet_id) แยกกัน)
+        // ซึ่ง PostgREST ไม่รองรับ join ตารางเดียวกันซ้ำในคำสั่งเดียว ทำให้ query error
+        // (แต่ไม่มี .catch() เลยหน้าค้างที่ "กำลังโหลด..." ตลอดไปแบบเงียบๆ)
+        // รวมเป็น pets(pet_id,name) ที่เดียว และใช้ !inner ตอนกรองเพื่อให้กรองแถวหลักได้จริง
+        var petsJoin = pet ? 'pets!inner(pet_id,name)' : 'pets(pet_id,name)';
+        var catJoin = cat ? 'categories!inner(category_name,category_id)' : 'categories(category_name,category_id)';
+        var params = 'select=transaction_id,amount,expense_date,expense_type,expense_note,'
+            + petsJoin + ',users(name),' + catJoin + '&order=expense_date.desc&limit=100';
+
         if (type) params += '&expense_type=eq.' + encodeURIComponent(type);
         if (pet) params += '&pets.pet_id=eq.' + pet;
         if (cat) params += '&categories.category_id=eq.' + cat;
 
+        var tbody = document.getElementById('historyTable');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+
         Api.query('expenses', params).then(function(data) {
             _expenses = data || [];
             render();
+        }).catch(function(err) {
+            console.error('Load history error:', err);
+            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
         });
     }
 
@@ -84,7 +99,6 @@ var History = (function() {
     function closeModal() { document.getElementById('expenseModal').classList.add('hidden'); }
 
     function submit() {
-        var user = Auth.getUser();
         var catId = document.getElementById('formCategory').value;
         var note = document.getElementById('formNote').value;
         var amount = document.getElementById('formAmount').value;
@@ -92,12 +106,26 @@ var History = (function() {
         var petId = document.getElementById('formPet').value;
         if (!amount || !date || !petId) { alert('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
         var hidden = [4,5,6].indexOf(Number(catId)) >= 0;
-        Api.insert('expenses', {
-            amount: Number(amount), expense_date: date,
-            expense_type: hidden ? 'แฝง' : 'หลัก',
-            pet_id: Number(petId), user_id: user.user_id,
-            category_id: Number(catId), expense_note: note || null
-        }).then(function() { closeModal(); load(); });
+
+        // โปรไฟล์ผู้ใช้ (Auth.getUser()) อาจยังโหลดไม่เสร็จถ้ากดบันทึกเร็วมาก
+        // (เพราะ dropdown สัตว์เลี้ยงพร้อมใช้งานได้ก่อนโปรไฟล์จะโหลดเสร็จ) จึงต้อง
+        // รอ loadProfile() ซ้ำถ้ายังไม่มี user แทนที่จะพังเงียบๆ ตอนอ่าน user.user_id
+        var userPromise = Auth.getUser() ? Promise.resolve(Auth.getUser()) : Auth.loadProfile();
+
+        userPromise.then(function(user) {
+            return Api.insert('expenses', {
+                amount: Number(amount), expense_date: date,
+                expense_type: hidden ? 'แฝง' : 'หลัก',
+                pet_id: Number(petId), user_id: user.user_id,
+                category_id: Number(catId), expense_note: note || null
+            });
+        }).then(function() {
+            closeModal();
+            load();
+        }).catch(function(err) {
+            console.error('Submit expense error:', err);
+            alert('บันทึกรายจ่ายไม่สำเร็จ: ' + (err.message || err));
+        });
     }
 
     return { init: init, load: load, openModal: openModal, closeModal: closeModal, submit: submit };

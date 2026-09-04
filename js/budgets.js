@@ -6,10 +6,15 @@ var Budgets = (function() {
     var _pets = [], _budgets = [];
 
     function init() {
-        Api.query('pets', 'select=pet_id,name').then(function(pets) {
+        var list = document.getElementById('budgetList');
+        return Api.query('pets', 'select=pet_id,name').then(function(pets) {
             _pets = pets || [];
             populateForm();
-            load();
+            populateFilters();
+            return load();
+        }).catch(function(err) {
+            console.error('Load pets error:', err);
+            if (list) list.innerHTML = '<div class="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</div>';
         });
     }
 
@@ -24,15 +29,79 @@ var Budgets = (function() {
         document.getElementById('formYear').value = now.getFullYear();
     }
 
+    // === ตัวกรอง: เลือกสัตว์เลี้ยง / เดือน / ปี ที่ต้องการดูงบประมาณ ===
+    function populateFilters() {
+        var petSel = document.getElementById('filterPet');
+        if (petSel) {
+            petSel.innerHTML = '<option value="">ทุกสัตว์เลี้ยง</option>'
+                + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('');
+        }
+
+        var monthSel = document.getElementById('filterMonth');
+        if (monthSel) {
+            var months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+            monthSel.innerHTML = '<option value="">ทุกเดือน</option>'
+                + months.map(function(m, i) { return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('');
+        }
+
+        var yearSel = document.getElementById('filterYear');
+        if (yearSel) {
+            var thisYear = new Date().getFullYear();
+            var years = [];
+            for (var y = thisYear + 1; y >= thisYear - 3; y--) { years.push(y); }
+            // แสดงเป็น พ.ศ. ให้ตรงกับที่อื่นในแอป แต่ค่าที่ส่งไป query ยังเป็น ค.ศ. ตามที่เก็บในฐานข้อมูล
+            yearSel.innerHTML = '<option value="">ทุกปี</option>'
+                + years.map(function(y) { return '<option value="' + y + '">' + (y + 543) + '</option>'; }).join('');
+        }
+    }
+
+    function hasActiveFilters() {
+        var petId = (document.getElementById('filterPet') || {}).value || '';
+        var month = (document.getElementById('filterMonth') || {}).value || '';
+        var year = (document.getElementById('filterYear') || {}).value || '';
+        return !!(petId || month || year);
+    }
+
+    function clearFilters() {
+        var petSel = document.getElementById('filterPet');
+        var monthSel = document.getElementById('filterMonth');
+        var yearSel = document.getElementById('filterYear');
+        if (petSel) petSel.value = '';
+        if (monthSel) monthSel.value = '';
+        if (yearSel) yearSel.value = '';
+        load();
+    }
+
     function load() {
-        Api.query('budgets', 'select=budget_id,budget_limit,budget_month,budget_year,pets(name),pets(pet_id)&order=budget_year.desc,budget_month.desc&limit=20')
-        .then(function(data) { _budgets = data || []; render(); });
+        var list = document.getElementById('budgetList');
+        var petId = (document.getElementById('filterPet') || {}).value || '';
+        var month = (document.getElementById('filterMonth') || {}).value || '';
+        var year = (document.getElementById('filterYear') || {}).value || '';
+
+        // เดิม select เรียก pets(...) ซ้ำ 2 ครั้ง (pets(name) และ pets(pet_id) แยกกัน)
+        // ซึ่ง PostgREST ไม่รองรับ join ตารางเดียวกันซ้ำในคำสั่งเดียว ทำให้ query error
+        // และเพราะไม่มี .catch() เลย หน้าค้างที่ "กำลังโหลด..." ตลอดไปแบบเงียบๆ
+        var params = 'select=budget_id,budget_limit,budget_month,budget_year,pets(pet_id,name)&order=budget_year.desc,budget_month.desc&limit=100';
+        if (petId) params += '&pet_id=eq.' + petId;
+        if (month) params += '&budget_month=eq.' + month;
+        if (year) params += '&budget_year=eq.' + year;
+
+        if (list) list.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+
+        return Api.query('budgets', params)
+        .then(function(data) { _budgets = data || []; render(); })
+        .catch(function(err) {
+            console.error('Load budgets error:', err);
+            if (list) list.innerHTML = '<div class="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</div>';
+        });
     }
 
     function render() {
         var list = document.getElementById('budgetList');
         if (!_budgets.length) {
-            list.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-coins text-4xl mb-3 block"></i>ยังไม่มีงบประมาณ</div>';
+            list.innerHTML = hasActiveFilters()
+                ? '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-filter-circle-xmark text-4xl mb-3 block"></i>ไม่พบงบประมาณตามเงื่อนไขที่เลือก</div>'
+                : '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-coins text-4xl mb-3 block"></i>ยังไม่มีงบประมาณ</div>';
             return;
         }
 
@@ -63,6 +132,9 @@ var Budgets = (function() {
                     + '<div class="w-full bg-gray-200 rounded-full h-2.5"><div class="' + barColor + ' h-2.5 rounded-full transition-all" style="width:' + percent + '%"></div></div>'
                     + '</div>';
             }).join('');
+        }).catch(function(err) {
+            console.error('Load budget spending error:', err);
+            list.innerHTML = '<div class="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</div>';
         });
     }
 
@@ -77,8 +149,14 @@ var Budgets = (function() {
             budget_year: Number(document.getElementById('formYear').value)
         };
         if (!data.budget_limit) { alert('กรุณากรอกงบประมาณ'); return; }
-        Api.insert('budgets', data).then(function() { closeModal(); load(); });
+        Api.insert('budgets', data).then(function() {
+            closeModal();
+            load();
+        }).catch(function(err) {
+            console.error('Save budget error:', err);
+            alert('บันทึกงบประมาณไม่สำเร็จ: ' + (err.message || err));
+        });
     }
 
-    return { init: init, openModal: openModal, closeModal: closeModal, save: save };
+    return { init: init, load: load, clearFilters: clearFilters, openModal: openModal, closeModal: closeModal, save: save };
 })();

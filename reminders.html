@@ -9,8 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }</script>
-    <style>body { background-color: #f8fafc; }</style>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }</script>
+    <link rel="stylesheet" href="style.css">
+    <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -54,11 +55,11 @@
         </div>
     </div>
 
-    <script src="js/config.env.js?v=2.2"></script>
-    <script src="js/api.js?v=2.2"></script>
-    <script src="js/auth.js?v=2.2"></script>
-    <script src="js/components.js?v=2.2"></script>
-    <script src="js/reminders.js?v=2.2"></script>
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/reminders.js"></script>
     <script>
         (function() {
             if (!UI.initPage('reminders')) return;

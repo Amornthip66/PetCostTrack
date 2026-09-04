@@ -10,9 +10,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }
     </script>
-    <style>body { background-color: #f8fafc; }</style>
+    <link rel="stylesheet" href="style.css">
+    <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -39,50 +40,111 @@
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75" onclick="Pets.closeModal()"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 max-h-[80vh] overflow-y-auto">
                     <h3 id="petModalTitle" class="text-lg font-medium text-gray-900 mb-4">เพิ่มสัตว์เลี้ยงใหม่</h3>
                     <input id="formPetId" type="hidden" value="">
+                    <input id="formPetExistingPhoto" type="hidden" value="">
                     <div class="space-y-4">
+                        <!-- รูปภาพ -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">รูปภาพ</label>
+                            <div class="mt-1 flex items-center gap-4">
+                                <img id="formPetPhotoPreview" class="h-16 w-16 rounded-full object-cover border border-gray-200 hidden" alt="ตัวอย่างรูปภาพ">
+                                <div id="formPetPhotoPlaceholder" class="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 text-2xl"><i class="fa-solid fa-paw"></i></div>
+                                <input id="formPetPhoto" type="file" accept="image/*" onchange="Pets.previewPhoto(this)" class="flex-1 text-sm text-gray-600 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-pet-light file:text-pet-DEFAULT file:cursor-pointer hover:file:bg-purple-200 cursor-pointer">
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">ไฟล์รูปภาพ ขนาดไม่เกิน 5MB</p>
+                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700">ชื่อ <span class="text-red-500">*</span></label>
                             <input id="formPetName" type="text" required placeholder="เช่น น้องโบโบ้" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">พันธุ์/ประเภท</label>
-                            <input id="formPetBreed" type="text" placeholder="เช่น สุนัข พันธุ์ผสม" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">ประเภท <span class="text-red-500">*</span></label>
+                                <select id="formPetType" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                    <option value="">เลือกประเภท</option>
+                                    <option value="สุนัข">สุนัข</option>
+                                    <option value="แมว">แมว</option>
+                                    <option value="นก">นก</option>
+                                    <option value="กระต่าย">กระต่าย</option>
+                                    <option value="ปลา">ปลา</option>
+                                    <option value="สัตว์เลื้อยคลาน">สัตว์เลื้อยคลาน</option>
+                                    <option value="หนู/สัตว์ฟันแทะ">หนู/สัตว์ฟันแทะ</option>
+                                    <option value="อื่นๆ">อื่นๆ</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">เพศ <span class="text-red-500">*</span></label>
+                                <select id="formPetGender" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                    <option value="">เลือกเพศ</option>
+                                    <option value="Male">ผู้</option>
+                                    <option value="Female">เมีย</option>
+                                </select>
+                            </div>
                         </div>
+
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">อายุ (ปี)</label>
-                            <input id="formPetAge" type="number" min="0" placeholder="เช่น 3" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            <label class="block text-sm font-medium text-gray-700">สายพันธุ์</label>
+                            <input id="formPetBreed" type="text" placeholder="เช่น โกลเด้นรีทรีฟเวอร์, พันธุ์ผสม" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">อายุ (ปี)</label>
+                                <input id="formPetAge" type="number" min="0" placeholder="เช่น 3" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">น้ำหนัก (กก.)</label>
+                                <input id="formPetWeight" type="number" min="0" step="0.1" placeholder="เช่น 12.5" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">วันเกิด</label>
+                                <input id="formPetBirthDate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">วันที่รับเลี้ยง</label>
+                                <input id="formPetAdoptionDate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">หมายเลขไมโครชิป</label>
+                            <input id="formPetMicrochip" type="text" placeholder="เช่น 900123456789012" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
                         </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                    <button onclick="Pets.save()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">บันทึก</button>
+                    <button id="petSaveBtn" onclick="Pets.save()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">บันทึก</button>
                     <button onclick="Pets.closeModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 sm:mt-0">ยกเลิก</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/config.env.js?v=2.2"></script>
-    <script src="js/api.js?v=2.2"></script>
-    <script src="js/auth.js?v=2.2"></script>
-    <script src="js/components.js?v=2.2"></script>
-    <script src="js/pets.js?v=2.2"></script>
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js?v=3"></script>
+    <script src="js/auth.js?v=2"></script>
+    <script src="js/components.js"></script>
+    <script src="js/pets.js?v=2"></script>
     <script>
         (function() {
             if (!UI.initPage('pets')) return;
 
-            // 1. โหลดข้อมูลสัตว์เลี้ยงทันที (รวดเร็ว ไม่ต้องรอ network หลายรอบ)
-            Pets.init();
-
-            // 2. ซิงค์ profile และอัปเดต Navbar เบื้องหลัง
+            // 1. auto-link + โหลดโปรไฟล์ก่อน แล้วค่อยโหลดข้อมูลสัตว์เลี้ยง
+            //    (RLS กรองตาม auth_user_id() ถ้ายังไม่ link บัญชีกับ users จะไม่เห็นสัตว์เลี้ยง)
             Auth.autoLinkUser().finally(function() {
                 return Auth.loadProfile().catch(function() { return null; });
             }).then(function() {
+                // 2. ซิงค์ Navbar แล้วโหลดข้อมูลสัตว์เลี้ยง
                 var nav = document.getElementById('mainNav');
                 if (nav) nav.innerHTML = UI.renderNav('pets');
+                return Pets.init();
             });
         })();
     </script>

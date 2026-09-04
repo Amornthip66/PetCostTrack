@@ -84,7 +84,6 @@ var History = (function() {
     function closeModal() { document.getElementById('expenseModal').classList.add('hidden'); }
 
     function submit() {
-        var user = Auth.getUser();
         var catId = document.getElementById('formCategory').value;
         var note = document.getElementById('formNote').value;
         var amount = document.getElementById('formAmount').value;
@@ -92,12 +91,26 @@ var History = (function() {
         var petId = document.getElementById('formPet').value;
         if (!amount || !date || !petId) { alert('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
         var hidden = [4,5,6].indexOf(Number(catId)) >= 0;
-        Api.insert('expenses', {
-            amount: Number(amount), expense_date: date,
-            expense_type: hidden ? 'แฝง' : 'หลัก',
-            pet_id: Number(petId), user_id: user.user_id,
-            category_id: Number(catId), expense_note: note || null
-        }).then(function() { closeModal(); load(); });
+
+        // โปรไฟล์ผู้ใช้ (Auth.getUser()) อาจยังโหลดไม่เสร็จถ้ากดบันทึกเร็วมาก
+        // (เพราะ dropdown สัตว์เลี้ยงพร้อมใช้งานได้ก่อนโปรไฟล์จะโหลดเสร็จ) จึงต้อง
+        // รอ loadProfile() ซ้ำถ้ายังไม่มี user แทนที่จะพังเงียบๆ ตอนอ่าน user.user_id
+        var userPromise = Auth.getUser() ? Promise.resolve(Auth.getUser()) : Auth.loadProfile();
+
+        userPromise.then(function(user) {
+            return Api.insert('expenses', {
+                amount: Number(amount), expense_date: date,
+                expense_type: hidden ? 'แฝง' : 'หลัก',
+                pet_id: Number(petId), user_id: user.user_id,
+                category_id: Number(catId), expense_note: note || null
+            });
+        }).then(function() {
+            closeModal();
+            load();
+        }).catch(function(err) {
+            console.error('Submit expense error:', err);
+            alert('บันทึกรายจ่ายไม่สำเร็จ: ' + (err.message || err));
+        });
     }
 
     return { init: init, load: load, openModal: openModal, closeModal: closeModal, submit: submit };

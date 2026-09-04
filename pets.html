@@ -12,7 +12,11 @@
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }
     </script>
-    <style>body { background-color: #f8fafc; }</style>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        :root { --pet: #0ea5e9; --pet-dark: #0369a1; --pet-light: #e0f2fe; }
+        body { background-color: #f8fafc; }
+    </style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -46,15 +50,15 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">ชื่อ <span class="text-red-500">*</span></label>
-                                <input id="formPetName" type="text" required placeholder="เช่น น้องโบโบ้" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetName" type="text" required placeholder="เช่น น้องโบโบ้" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">ประเภทสัตว์เลี้ยง <span class="text-red-500">*</span></label>
-                                <input id="formPetType" type="text" required placeholder="เช่น สุนัข, แมว" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetType" type="text" required placeholder="เช่น สุนัข, แมว" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">เพศ <span class="text-red-500">*</span></label>
-                                <select id="formPetGender" required class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <select id="formPetGender" required class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                                     <option value="">เลือกเพศ</option>
                                     <option value="ผู้">ผู้</option>
                                     <option value="เมีย">เมีย</option>
@@ -62,36 +66,36 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">อายุ (ปี) <span class="text-red-500">*</span></label>
-                                <input id="formPetAge" type="number" min="0" required placeholder="เช่น 3" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetAge" type="number" min="0" required placeholder="เช่น 3" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">สายพันธุ์</label>
-                                <input id="formPetBreed" type="text" placeholder="เช่น ชิสุ, โกลเด้น" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetBreed" type="text" placeholder="เช่น ชิสุ, โกลเด้น" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">น้ำหนัก (กก.)</label>
-                                <input id="formPetWeight" type="number" step="0.01" placeholder="เช่น 5.5" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetWeight" type="number" step="0.01" placeholder="เช่น 5.5" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">วันเกิด</label>
-                                <input id="formPetBirthdate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetBirthdate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">วันที่รับเลี้ยง</label>
-                                <input id="formPetAdoptionDate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                                <input id="formPetAdoptionDate" type="date" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                             </div>
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700">หมายเลขไมโครชิป</label>
-                            <input id="formPetMicrochip" type="text" placeholder="ระบุหมายเลข" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            <input id="formPetMicrochip" type="text" placeholder="ระบุหมายเลข" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">รูปภาพสัตว์เลี้ยง</label>
-                            <input id="formPetImage" type="file" accept="image/*" class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            <input id="formPetImage" type="file" accept="image/*" class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                         </div>
                     </div>
                 </div>
@@ -114,8 +118,8 @@
                     <p class="text-sm text-gray-500 mb-4">ผู้ร่วมดูแล <span id="familyModalPetName" class="font-medium text-gray-700"></span></p>
 
                     <div class="flex gap-2 mb-1">
-                        <input id="familyAddEmail" type="email" placeholder="อีเมลสมาชิกที่ลงทะเบียนแล้ว" class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
-                        <button onclick="Pets.addFamilyMember()" class="px-4 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition whitespace-nowrap"><i class="fa-solid fa-user-plus mr-1"></i>เชิญ</button>
+                        <input id="familyAddEmail" type="email" placeholder="อีเมลสมาชิกที่ลงทะเบียนแล้ว" class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
+                        <button onclick="Pets.addFamilyMember()" class="px-4 py-2.5 bg-pet text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition whitespace-nowrap"><i class="fa-solid fa-user-plus mr-1"></i>เชิญ</button>
                     </div>
                     <p id="familyAddMsg" class="text-red-500 text-sm mb-3 hidden"></p>
 
@@ -124,7 +128,7 @@
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                    <button onclick="Pets.closeFamilyModal()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition">ปิด</button>
+                    <button onclick="Pets.closeFamilyModal()" class="w-full sm:w-auto px-4 py-2 bg-pet text-white rounded-lg hover:bg-pet-dark transition">ปิด</button>
                 </div>
             </div>
         </div>

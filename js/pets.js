@@ -1,39 +1,11 @@
 /**
  * Pets Module
- * จัดการสัตว์เลี้ยง (CRUD) พร้อมรูปภาพและรายละเอียด
+ * จัดการสัตว์เลี้ยง (CRUD)
  */
 var Pets = (function() {
 
     var _pets = [];
-    var MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
-
-    var TYPE_EMOJI = {
-        'สุนัข': '🐶',
-        'แมว': '🐱',
-        'นก': '🐦',
-        'กระต่าย': '🐰',
-        'ปลา': '🐠',
-        'สัตว์เลื้อยคลาน': '🦎',
-        'หนู/สัตว์ฟันแทะ': '🐹'
-    };
-    function typeEmoji(t) { return TYPE_EMOJI[t] || '🐾'; }
-
-    var THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    function formatDate(s) {
-        if (!s) return '';
-        var d = new Date(s);
-        if (isNaN(d.getTime())) return '';
-        return d.getDate() + ' ' + THAI_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543);
-    }
-
-    function uuid() {
-        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-        // Fallback สำหรับเบราว์เซอร์เก่าที่ไม่มี crypto.randomUUID
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
+    var _familyPetId = null;
 
     function init() {
         return load();
@@ -47,14 +19,13 @@ var Pets = (function() {
 
         var user = Auth.getUser();
         var userId = (user && user.user_id) ? user.user_id : null;
-        var selectFields = 'pet_id,name,photo_url,pet_type,breed,gender,age,weight_kg,birth_date,adoption_date,microchip_id';
 
         // ดึงข้อมูลสัตว์เลี้ยงทั้งหมดทันทีในคำขอเดียว (รวดเร็วมาก)
-        var petsPromise = Api.query('pets', 'select=' + selectFields + '&order=pet_id.asc');
-
+        var petsPromise = Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc');
+        
         // ดึงสิทธิ์ pet_access คู่ขนานกันเฉพาะกรณีที่มี userId ป้องกัน user_id=eq.undefined
-        var accessPromise = userId
-            ? Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId).catch(function() { return []; })
+        var accessPromise = userId 
+            ? Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId).catch(function() { return []; }) 
             : Promise.resolve([]);
 
         return Promise.all([petsPromise, accessPromise])
@@ -65,31 +36,36 @@ var Pets = (function() {
             access.forEach(function(a) { if (a && a.pet_id) accessMap[a.pet_id] = a.access_role; });
 
             _pets = pets.map(function(p) {
-                p.access_role = accessMap[p.pet_id] || (user && user.role ? user.role : 'Owner');
-                return p;
+                return {
+                    pet_id: p.pet_id,
+                    name: p.name,
+                    type_breed: p.type_breed,
+                    age: p.age,
+                    access_role: accessMap[p.pet_id] || (user && user.role ? user.role : 'Owner')
+                };
             });
             render();
         }).catch(function(err) {
             console.error('Pets load error:', err);
             // Fallback: หาก query คู่ขนานมีปัญหา ให้ดึงเฉพาะ pets ตารางหลักตรงๆ
-            return Api.query('pets', 'select=' + selectFields + '&order=pet_id.asc')
+            return Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc')
             .then(function(pets) {
                 _pets = (pets || []).map(function(p) {
-                    p.access_role = 'Owner';
-                    return p;
+                    return {
+                        pet_id: p.pet_id,
+                        name: p.name,
+                        type_breed: p.type_breed,
+                        age: p.age,
+                        access_role: 'Owner'
+                    };
                 });
                 render();
             }).catch(function(e) {
                 console.error('Fatal load pets error:', e);
-                if (grid) grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-400">โหลดข้อมูลสัตว์เลี้ยงไม่สำเร็จ: ' + (e.message || e) + '</div>';
+                _pets = [];
+                render();
             });
         });
-    }
-
-    function genderLabel(g) {
-        if (g === 'Male') return 'ผู้';
-        if (g === 'Female') return 'เมีย';
-        return '';
     }
 
     function render() {
@@ -105,105 +81,30 @@ var Pets = (function() {
         }
         grid.innerHTML = _pets.map(function(p) {
             var isOwner = p.access_role === 'Owner';
-            var photo = p.photo_url
-                ? '<img src="' + p.photo_url + '" alt="' + p.name + '" class="h-32 w-full object-cover">'
-                : '<div class="h-32 bg-gradient-to-br from-pet-light to-purple-100 flex items-center justify-center text-6xl">' + typeEmoji(p.pet_type) + '</div>';
-
-            var metaLine1 = [p.pet_type, p.breed].filter(Boolean).join(' • ') || 'ไม่ระบุประเภท/สายพันธุ์';
-            var genderTxt = genderLabel(p.gender);
-
-            var metaLine2Parts = [];
-            metaLine2Parts.push(p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ');
-            if (p.weight_kg) metaLine2Parts.push(Number(p.weight_kg) + ' กก.');
-            var metaLine2 = metaLine2Parts.join(' • ');
-
-            var extraLines = '';
-            if (p.birth_date || p.adoption_date) {
-                var parts = [];
-                if (p.birth_date) parts.push('เกิด ' + formatDate(p.birth_date));
-                if (p.adoption_date) parts.push('รับเลี้ยง ' + formatDate(p.adoption_date));
-                extraLines += '<p class="text-xs text-gray-400 mt-1">' + parts.join(' • ') + '</p>';
-            }
-            if (p.microchip_id) {
-                extraLines += '<p class="text-xs text-gray-400 mt-1">ไมโครชิป: ' + p.microchip_id + '</p>';
-            }
-
+            var emoji = (p.type_breed && p.type_breed.indexOf('แมว') >= 0) ? '🐱' : '🐶';
             return '<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">'
-                + photo
+                + '<div class="h-32 bg-gradient-to-br from-pet-light to-blue-100 flex items-center justify-center text-6xl">' + emoji + '</div>'
                 + '<div class="p-5">'
                 + '<div class="flex items-center justify-between mb-2">'
-                + '<h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">' + p.name
-                + (genderTxt ? '<span class="text-xs font-normal text-gray-400"><i class="fa-solid ' + (p.gender === 'Male' ? 'fa-mars' : 'fa-venus') + '"></i> ' + genderTxt + '</span>' : '')
-                + '</h3>'
+                + '<h3 class="text-lg font-bold text-gray-900">' + p.name + '</h3>'
                 + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isOwner ? 'bg-pet-light text-pet-DEFAULT' : 'bg-green-100 text-green-700') + '">' + p.access_role + '</span>'
                 + '</div>'
-                + '<p class="text-sm text-gray-500">' + metaLine1 + '</p>'
-                + '<p class="text-sm text-gray-500">' + metaLine2 + '</p>'
-                + extraLines
+                + '<p class="text-sm text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + '</p>'
+                + '<p class="text-sm text-gray-500">' + (p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ') + '</p>'
                 + (isOwner ? '<div class="mt-4 flex gap-2">'
                     + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 px-3 py-1.5 text-sm text-pet-DEFAULT border border-pet-DEFAULT rounded-lg hover:bg-pet-light transition"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
+                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
                     + '<button onclick="Pets.remove(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-red-500 border border-red-300 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash"></i></button>'
                     + '</div>' : '')
                 + '</div></div>';
         }).join('');
     }
 
-    function resetPhotoInput() {
-        var fileInput = document.getElementById('formPetPhoto');
-        var preview = document.getElementById('formPetPhotoPreview');
-        var placeholder = document.getElementById('formPetPhotoPlaceholder');
-        if (fileInput) fileInput.value = '';
-        if (preview) { preview.src = ''; preview.classList.add('hidden'); }
-        if (placeholder) placeholder.classList.remove('hidden');
-    }
-
-    // แสดงตัวอย่างรูปที่เลือก + ตรวจชนิด/ขนาดไฟล์ทันทีตอนเลือก (ไม่ต้องรอกดบันทึกถึงจะรู้ว่าไฟล์ใช้ไม่ได้)
-    function previewPhoto(input) {
-        var file = input.files && input.files[0];
-        if (!file) return;
-
-        if (!/^image\//.test(file.type)) {
-            alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
-            input.value = '';
-            return;
-        }
-        if (file.size > MAX_PHOTO_BYTES) {
-            alert('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB');
-            input.value = '';
-            return;
-        }
-
-        var preview = document.getElementById('formPetPhotoPreview');
-        var placeholder = document.getElementById('formPetPhotoPlaceholder');
-        if (preview) {
-            preview.src = URL.createObjectURL(file);
-            preview.classList.remove('hidden');
-        }
-        if (placeholder) placeholder.classList.add('hidden');
-    }
-
     function openModal(pet) {
         document.getElementById('formPetId').value = pet ? pet.pet_id : '';
-        document.getElementById('formPetExistingPhoto').value = pet ? (pet.photo_url || '') : '';
         document.getElementById('formPetName').value = pet ? pet.name : '';
-        document.getElementById('formPetType').value = pet ? (pet.pet_type || '') : '';
-        document.getElementById('formPetGender').value = pet ? (pet.gender || '') : '';
-        document.getElementById('formPetBreed').value = pet ? (pet.breed || '') : '';
+        document.getElementById('formPetBreed').value = pet ? (pet.type_breed || '') : '';
         document.getElementById('formPetAge').value = pet ? (pet.age || '') : '';
-        document.getElementById('formPetWeight').value = pet ? (pet.weight_kg || '') : '';
-        document.getElementById('formPetBirthDate').value = pet ? (pet.birth_date || '') : '';
-        document.getElementById('formPetAdoptionDate').value = pet ? (pet.adoption_date || '') : '';
-        document.getElementById('formPetMicrochip').value = pet ? (pet.microchip_id || '') : '';
-
-        resetPhotoInput();
-        var preview = document.getElementById('formPetPhotoPreview');
-        var placeholder = document.getElementById('formPetPhotoPlaceholder');
-        if (pet && pet.photo_url && preview && placeholder) {
-            preview.src = pet.photo_url;
-            preview.classList.remove('hidden');
-            placeholder.classList.add('hidden');
-        }
-
         document.getElementById('petModalTitle').textContent = pet ? 'แก้ไขสัตว์เลี้ยง' : 'เพิ่มสัตว์เลี้ยงใหม่';
         document.getElementById('petModal').classList.remove('hidden');
     }
@@ -215,76 +116,27 @@ var Pets = (function() {
         if (pet) openModal(pet);
     }
 
-    function setSaving(saving) {
-        var btn = document.getElementById('petSaveBtn');
-        if (!btn) return;
-        btn.disabled = saving;
-        btn.innerHTML = saving ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...' : 'บันทึก';
-    }
-
-    function uploadPetPhoto(file) {
-        var ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-        var path = uuid() + '.' + ext;
-        return Api.uploadFile('pet-photos', path, file);
-    }
-
     function save() {
         var id = document.getElementById('formPetId').value;
-        var name = document.getElementById('formPetName').value.trim();
-        var petType = document.getElementById('formPetType').value;
-        var gender = document.getElementById('formPetGender').value;
-        var breed = document.getElementById('formPetBreed').value.trim();
-        var age = document.getElementById('formPetAge').value;
-        var weight = document.getElementById('formPetWeight').value;
-        var birthDate = document.getElementById('formPetBirthDate').value;
-        var adoptionDate = document.getElementById('formPetAdoptionDate').value;
-        var microchip = document.getElementById('formPetMicrochip').value.trim();
-        var existingPhoto = document.getElementById('formPetExistingPhoto').value;
-        var fileInput = document.getElementById('formPetPhoto');
-        var file = fileInput && fileInput.files && fileInput.files[0];
-
-        if (!name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
-        if (!petType) { alert('กรุณาเลือกประเภทของสัตว์เลี้ยง'); return; }
-        if (!gender) { alert('กรุณาเลือกเพศ'); return; }
-        // เช็คไฟล์ซ้ำอีกรอบตอนบันทึก เผื่อ event onchange ตอนเลือกไฟล์ไม่ได้ทำงาน
-        if (file && (!/^image\//.test(file.type) || file.size > MAX_PHOTO_BYTES)) {
-            alert('ไฟล์รูปภาพไม่ถูกต้อง (ต้องเป็นรูปภาพและขนาดไม่เกิน 5MB)');
-            return;
-        }
-
         var data = {
-            name: name,
-            pet_type: petType,
-            gender: gender,
-            breed: breed || null,
-            age: age ? Number(age) : null,
-            weight_kg: weight ? Number(weight) : null,
-            birth_date: birthDate || null,
-            adoption_date: adoptionDate || null,
-            microchip_id: microchip || null
+            name: document.getElementById('formPetName').value.trim(),
+            type_breed: document.getElementById('formPetBreed').value.trim() || null,
+            age: document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null
         };
+        if (!data.name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
 
-        setSaving(true);
-
-        var uploadPromise = file ? uploadPetPhoto(file) : Promise.resolve(null);
-
-        uploadPromise.then(function(uploadedUrl) {
-            data.photo_url = uploadedUrl || existingPhoto || null;
-
-            if (id) {
-                return Api.update('pets', 'pet_id=eq.' + id, data);
-            }
-            return Api.insert('pets', data).then(function(newPet) {
+        var promise;
+        if (id) {
+            promise = Api.update('pets', 'pet_id=eq.' + id, data);
+        } else {
+            promise = Api.insert('pets', data).then(function(newPet) {
                 var created = Array.isArray(newPet) ? newPet[0] : newPet;
                 var user = Auth.getUser();
                 if (user && user.user_id && created && created.pet_id) {
-                    // ผู้สร้างสัตว์เลี้ยงตัวนี้ต้องเป็น Owner ของสัตว์เลี้ยงตัวนี้เสมอ
-                    // (ไม่ใช่ role ระดับบัญชีของ user ซึ่งอาจเป็น 'Co-caretaker' ก็ได้)
-                    // มิฉะนั้น pets_delete/pets_update policy (user_is_pet_owner) จะบล็อกไม่ให้แก้ไข/ลบสัตว์เลี้ยงตัวเองในภายหลัง
                     return Api.insert('pet_access', {
                         pet_id: created.pet_id,
                         user_id: user.user_id,
-                        access_role: 'Owner'
+                        access_role: user.role || 'Owner'
                     }).catch(function(err) {
                         console.warn('Could not insert pet_access record:', err);
                     }).then(function() {
@@ -293,13 +145,13 @@ var Pets = (function() {
                 }
                 return created;
             });
-        }).then(function() {
-            setSaving(false);
+        }
+
+        promise.then(function() {
             closeModal();
             load();
         }).catch(function(e) {
             console.error('Save pet error:', e);
-            setSaving(false);
             alert('เกิดข้อผิดพลาด: ' + (e.message || e));
         });
     }
@@ -311,5 +163,99 @@ var Pets = (function() {
             .catch(function(err) { alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + (err.message || err)); });
     }
 
-    return { init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove, previewPhoto: previewPhoto };
+    // === จัดการครอบครัว (Family Management) ===
+    function manageFamily(petId) {
+        _familyPetId = petId;
+        var pet = _pets.find(function(p) { return p.pet_id === petId; });
+        document.getElementById('familyModalPetName').textContent = pet ? pet.name : '';
+        document.getElementById('familyAddEmail').value = '';
+        document.getElementById('familyAddMsg').classList.add('hidden');
+        document.getElementById('familyModal').classList.remove('hidden');
+        loadFamilyMembers();
+    }
+
+    function closeFamilyModal() {
+        document.getElementById('familyModal').classList.add('hidden');
+        _familyPetId = null;
+    }
+
+    function loadFamilyMembers() {
+        var list = document.getElementById('familyMembersList');
+        list.innerHTML = '<div class="text-center py-4 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+
+        Api.query('pet_access', 'select=user_id,access_role&pet_id=eq.' + _familyPetId)
+        .then(function(access) {
+            access = access || [];
+            var userIds = access.map(function(a) { return a.user_id; });
+            if (!userIds.length) { list.innerHTML = ''; return; }
+            return Api.query('users', 'select=user_id,name,email&user_id=in.(' + userIds.join(',') + ')')
+            .then(function(users) {
+                var userMap = {};
+                (users || []).forEach(function(u) { userMap[u.user_id] = u; });
+
+                list.innerHTML = access.map(function(a) {
+                    var u = userMap[a.user_id] || { name: 'ไม่ทราบชื่อ', email: '' };
+                    var isRoleOwner = a.access_role === 'Owner';
+                    return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
+                        + '<img class="h-9 w-9 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + encodeURIComponent(u.name) + '&background=e0f2fe&color=0369a1" alt="">'
+                        + '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900 truncate">' + u.name + '</p><p class="text-xs text-gray-500 truncate">' + u.email + '</p></div>'
+                        + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isRoleOwner ? 'bg-pet-light text-pet-DEFAULT' : 'bg-green-100 text-green-700') + '">' + a.access_role + '</span>'
+                        + (isRoleOwner ? '' : '<button onclick="Pets.removeFamilyMember(' + a.user_id + ')" class="ml-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg transition" title="นำออก"><i class="fa-solid fa-user-xmark"></i></button>')
+                        + '</div>';
+                }).join('');
+            });
+        })
+        .catch(function(err) {
+            console.error('Load family members error:', err);
+            list.innerHTML = '<p class="text-red-500 text-sm">ไม่สามารถโหลดรายชื่อสมาชิกได้</p>';
+        });
+    }
+
+    function addFamilyMember() {
+        var emailInput = document.getElementById('familyAddEmail');
+        var msg = document.getElementById('familyAddMsg');
+        var email = emailInput.value.trim();
+        msg.classList.add('hidden');
+
+        if (!email) { alert('กรุณากรอกอีเมลของสมาชิกที่ต้องการเชิญ'); return; }
+        if (!_familyPetId) return;
+
+        Api.rpc('find_user_by_email', { p_email: email })
+        .then(function(result) {
+            var found = Array.isArray(result) ? result[0] : result;
+            if (!found || !found.user_id) {
+                throw new Error('ไม่พบผู้ใช้ที่ใช้อีเมลนี้ในระบบ กรุณาให้สมาชิกลงทะเบียนก่อน แล้วลองอีกครั้ง');
+            }
+            return Api.insert('pet_access', {
+                pet_id: _familyPetId,
+                user_id: found.user_id,
+                access_role: 'Co-caretaker'
+            });
+        })
+        .then(function() {
+            emailInput.value = '';
+            loadFamilyMembers();
+        })
+        .catch(function(err) {
+            var text = (err && err.message) || String(err);
+            if (text.indexOf('duplicate') >= 0 || text.indexOf('pet_access_pkey') >= 0) {
+                text = 'สมาชิกคนนี้อยู่ในรายชื่อผู้ดูแลของสัตว์เลี้ยงตัวนี้อยู่แล้ว';
+            }
+            msg.textContent = text;
+            msg.classList.remove('hidden');
+        });
+    }
+
+    function removeFamilyMember(userId) {
+        if (!_familyPetId) return;
+        if (!confirm('ต้องการนำสมาชิกคนนี้ออกจากผู้ร่วมดูแลสัตว์เลี้ยงตัวนี้หรือไม่?')) return;
+        Api.remove('pet_access', 'pet_id=eq.' + _familyPetId + '&user_id=eq.' + userId)
+        .then(function() { loadFamilyMembers(); })
+        .catch(function(err) { alert('ไม่สามารถนำสมาชิกออกได้: ' + (err.message || err)); });
+    }
+
+    return {
+        init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove,
+        manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember, removeFamilyMember: removeFamilyMember
+    };
 })();

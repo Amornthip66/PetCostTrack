@@ -4,6 +4,18 @@
    ทันสมัย ใช้งานง่าย ไม่ใช้ลูกศรเริ่มต้นของเบราว์เซอร์ที่ดูเก่า
    ========================================================================== */
 
+/* ==========================================================================
+   Theme tokens (design tokens)
+   ค่าเริ่มต้นคือม่วงแบรนด์ #663399 ส่วนหน้าเว็บที่มีธีมสีอื่น (เช่น สัตว์เลี้ยง/โปรไฟล์
+   ที่เป็นฟ้า) เขียน override :root { --pet: ... } ไว้ใน <style> ของหน้านั้นเอง
+   แล้วปุ่ม .btn-* จะได้สีตามธีมของหน้านั้นอัตโนมัติ
+   ========================================================================== */
+:root {
+    --pet: #663399;
+    --pet-dark: #4b2673;
+    --pet-light: #f2ebfa;
+}
+
 select {
     appearance: none;
     -webkit-appearance: none;
@@ -19,7 +31,7 @@ select {
 }
 
 select:hover {
-    border-color: #663399;
+    border-color: var(--pet);
 }
 
 select:focus {
@@ -47,15 +59,15 @@ select optgroup {
    ปรับให้แสดงสีม่วง และมี effect ตอนกด
    ========================================================================== */
 button,
-a.bg-pet-DEFAULT,
+a.bg-pet,
 input[type="submit"] {
     transition: box-shadow .15s ease, background-color .15s ease, transform .1s ease;
 }
 
 button:active,
-a.bg-pet-DEFAULT:active,
+a.bg-pet:active,
 input[type="submit"]:active {
-    box-shadow: 0 0 0 4px rgba(102, 51, 153, .3), 0 0 20px 6px rgba(102, 51, 153, .65);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pet) 30%, transparent), 0 0 20px 6px color-mix(in srgb, var(--pet) 65%, transparent);
     transform: scale(.98);
 }
 
@@ -80,26 +92,26 @@ input[type="submit"]:active {
 
 .btn:active { transform: scale(.98); }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
-.btn:focus-visible { outline: 2px solid #663399; outline-offset: 2px; }
+.btn:focus-visible { outline: 2px solid var(--pet); outline-offset: 2px; }
 
 .btn-sm {
     padding: .375rem .75rem;
     font-size: .8125rem;
 }
 
-/* ปุ่มหลัก (ม่วงแบรนด์) */
+/* ปุ่มหลัก (ม่วงแบรนด์ หรือสี --pet ของธีมหน้านั้น) */
 .btn-primary {
-    background-color: #663399;
-    border-color: #663399;
+    background-color: var(--pet);
+    border-color: var(--pet);
     color: #fff;
     box-shadow: 0 1px 2px rgba(16, 24, 40, .08);
 }
 .btn-primary:hover {
-    background-color: #4b2673;
-    border-color: #4b2673;
+    background-color: var(--pet-dark);
+    border-color: var(--pet-dark);
 }
 .btn-primary:active {
-    box-shadow: 0 0 0 4px rgba(102, 51, 153, .3), 0 0 20px 6px rgba(102, 51, 153, .65);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pet) 30%, transparent), 0 0 20px 6px color-mix(in srgb, var(--pet) 65%, transparent);
 }
 
 /* ปุ่มรอง (พื้นหลังขาว ขอบเทาเข้มชัดเจน) */
@@ -125,16 +137,16 @@ input[type="submit"]:active {
     border-color: #ef4444;
 }
 
-/* ปุ่มแก้ไข/โครงสีม่วง */
+/* ปุ่มแก้ไข/โครงสีธีม */
 .btn-outline-primary {
     background-color: #fff;
-    border-color: #663399;
-    color: #663399;
+    border-color: var(--pet);
+    color: var(--pet);
     box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
 }
 .btn-outline-primary:hover {
-    background-color: #f2ebfa;
-    border-color: #4b2673;
+    background-color: var(--pet-light);
+    border-color: var(--pet-dark);
 }
 
 /* ปุ่มสำเร็จ (เขียว) */
@@ -158,5 +170,4 @@ input[type="submit"]:active {
     background-color: rgba(255, 255, 255, .15);
     border-color: rgba(255, 255, 255, .5);
     color: #fff;
-}
 }

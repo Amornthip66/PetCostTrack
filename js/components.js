@@ -32,7 +32,7 @@ var UI = (function() {
 
         // Header สีเข้ม (ไม่ใช่ม่วงสด #663399 ตรงๆ) ให้ดูเป็นแดชบอร์ดยุคใหม่ + เส้นขอบล่าง
         // สีม่วงแบรนด์บางๆ คั่นไว้ให้พอมีสีแบรนด์เชื่อมกับ nav link/ปุ่มที่ยังเป็น #663399
-        return '<nav class="bg-[#1e1030] border-b border-pet-DEFAULT/40 shadow-lg sticky top-0 z-40">'
+        return '<nav class="bg-[#1e1030] border-b border-pet/40 shadow-lg sticky top-0 z-40">'
             + '<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">'
             + '<div class="flex justify-between h-16">'
             + '<div class="flex items-center">'

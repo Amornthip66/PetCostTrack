@@ -119,7 +119,7 @@ var Budgets = (function() {
                 var limit = Number(b.budget_limit);
                 var percent = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
                 var isOver = spent > limit;
-                var barColor = isOver ? 'bg-red-500' : percent > 80 ? 'bg-yellow-500' : 'bg-pet-DEFAULT';
+                var barColor = isOver ? 'bg-red-500' : percent > 80 ? 'bg-yellow-500' : 'bg-pet';
                 var TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
                 return '<div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">'

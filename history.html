@@ -29,20 +29,20 @@
 
         <!-- Filters -->
         <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
-            <select id="filterType" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterType" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกประเภท</option>
                 <option value="หลัก">ค่าใช้จ่ายปกติ</option>
                 <option value="แฝง">ค่าใช้จ่ายแฝง</option>
             </select>
-            <select id="filterPet" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterPet" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกสัตว์เลี้ยง</option>
             </select>
-            <select id="filterCategory" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+            <select id="filterCategory" onchange="History.load()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
                 <option value="">ทุกหมวดหมู่</option>
             </select>
             <div class="flex items-center gap-2 ml-auto">
                 <span class="text-sm text-gray-500">ยอดรวม:</span>
-                <span id="totalFiltered" class="text-lg font-bold text-pet-DEFAULT">฿ 0</span>
+                <span id="totalFiltered" class="text-lg font-bold text-pet">฿ 0</span>
             </div>
         </div>
 
@@ -79,17 +79,17 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">หมวดหมู่ <span class="text-red-500">*</span></label>
-                            <select id="formCategory" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                            <select id="formCategory" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                                 <optgroup label="รายจ่ายปกติ"><option value="1">ค่าอาหาร</option><option value="2">ค่าวัคซีน/ตรวจสุขภาพ</option><option value="3">ถ่ายพยาธิ</option></optgroup>
                                 <optgroup label="ค่าใช้จ่ายแฝง"><option value="4" selected>ค่ารักษาพยาบาลฉุกเฉิน</option><option value="5">ค่าซ่อมแซมสิ่งของเสียหาย</option><option value="6">ค่าฝากเลี้ยง</option></optgroup>
                             </select>
                         </div>
-                        <div><label class="block text-sm font-medium text-gray-700">รายการ</label><input id="formNote" type="text" placeholder="รายละเอียด" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">รายการ</label><input id="formNote" type="text" placeholder="รายละเอียด" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" placeholder="0.00" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
-                            <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" placeholder="0.00" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         </div>
-                        <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none"><option value="">กำลังโหลด...</option></select></div>
+                        <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">

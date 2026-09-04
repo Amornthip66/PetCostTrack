@@ -50,11 +50,11 @@ var UI = (function() {
             + '</div>'
             + '<img class="h-10 w-10 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar">'
             + '</a>'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 px-3 py-1.5 text-sm text-purple-200 hover:text-white hover:bg-white/10 rounded-lg transition" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="ml-2 btn btn-nav btn-sm" title="ออกจากระบบ"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
             + '<div class="flex items-center gap-1 sm:hidden">'
             + '<a href="profile.html" title="ไปที่โปรไฟล์ของฉัน"><img class="h-8 w-8 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + avatarName + '&background=ffffff&color=663399" alt="Avatar"></a>'
-            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="p-2 text-purple-200 hover:text-white"><i class="fa-solid fa-right-from-bracket"></i></button>'
+            + '<button onclick="Auth.logout().then(function(){window.location.href=\'login.html\'})" class="btn btn-nav btn-sm"><i class="fa-solid fa-right-from-bracket"></i></button>'
             + '</div>'
             + '</div></div></nav>';
     }

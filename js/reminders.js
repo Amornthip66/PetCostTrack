@@ -48,8 +48,8 @@ var Reminders = (function() {
                 + '<p class="text-xs text-gray-500">' + (r.pets ? r.pets.name : '') + ' • ' + r.frequency + ' • ครบกำหนด ' + UI.formatDate(r.next_due_date) + '</p>'
                 + '</div>'
                 + '<div class="flex items-center gap-2">'
-                + (isDone ? '' : '<button onclick="Reminders.complete(' + r.task_id + ')" class="px-3 py-1.5 text-xs bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition"><i class="fa-solid fa-check mr-1"></i>เสร็จแล้ว</button>')
-                + '<button onclick="Reminders.remove(' + r.task_id + ')" class="px-2 py-1.5 text-xs bg-pet-DEFAULT text-white hover:bg-pet-dark rounded-lg transition"><i class="fa-solid fa-trash"></i></button>'
+                + (isDone ? '' : '<button onclick="Reminders.complete(' + r.task_id + ')" class="btn btn-sm btn-success"><i class="fa-solid fa-check mr-1"></i>เสร็จแล้ว</button>')
+                + '<button onclick="Reminders.remove(' + r.task_id + ')" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash"></i></button>'
                 + '</div></div>';
         }).join('');
     }

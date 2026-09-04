@@ -106,25 +106,14 @@ var Profile = (function() {
             .map(function(el) { return Number(el.value); });
         if (!petIds.length) { alert('กรุณาเลือกสัตว์เลี้ยงอย่างน้อย 1 ตัว'); return; }
 
-        Api.rpc('find_user_by_email', { p_email: email })
-        .then(function(result) {
-            var found = Array.isArray(result) ? result[0] : result;
-            if (!found || !found.user_id) {
-                throw new Error('ไม่พบผู้ใช้ที่ใช้อีเมลนี้ในระบบ กรุณาให้สมาชิกลงทะเบียนก่อน แล้วลองอีกครั้ง');
-            }
-            return Promise.all(petIds.map(function(petId) {
-                return Api.insert('pet_access', {
-                    pet_id: petId,
-                    user_id: found.user_id,
-                    access_role: 'Co-caretaker'
-                }).catch(function(err) {
-                    var text = (err && err.message) || String(err);
-                    // สมาชิกอาจเป็นผู้ดูแลสัตว์เลี้ยงบางตัวอยู่แล้ว ข้ามไปได้โดยไม่ถือเป็นข้อผิดพลาด
-                    if (text.indexOf('duplicate') >= 0 || text.indexOf('pet_access_pkey') >= 0) return null;
-                    throw err;
-                });
-            }));
-        })
+        Promise.all(petIds.map(function(petId) {
+            return Api.rpc('invite_co_caretaker', { p_pet_id: petId, p_email: email }).catch(function(err) {
+                var text = (err && err.message) || String(err);
+                // ถ้าสัตว์เลี้ยงบางตัวเชิญไปแล้วก่อนหน้า/เป็นสมาชิกอยู่แล้ว ข้ามได้โดยไม่ถือเป็นข้อผิดพลาด
+                if (text.indexOf('อยู่แล้ว') >= 0) return null;
+                throw err;
+            });
+        }))
         .then(function() {
             closeInviteModal();
             loadFamily();

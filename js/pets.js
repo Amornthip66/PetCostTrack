@@ -183,17 +183,22 @@ var Pets = (function() {
         var list = document.getElementById('familyMembersList');
         list.innerHTML = '<div class="text-center py-4 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
 
-        Api.query('pet_access', 'select=user_id,access_role&pet_id=eq.' + _familyPetId)
-        .then(function(access) {
-            access = access || [];
-            var userIds = access.map(function(a) { return a.user_id; });
+        Promise.all([
+            Api.query('pet_access', 'select=user_id,access_role&pet_id=eq.' + _familyPetId),
+            Api.query('pet_invitations', 'select=invitation_id,invited_user_id,status&pet_id=eq.' + _familyPetId + '&status=eq.pending').catch(function() { return []; })
+        ])
+        .then(function(results) {
+            var access = results[0] || [];
+            var invitations = results[1] || [];
+            var userIds = access.map(function(a) { return a.user_id; })
+                .concat(invitations.map(function(i) { return i.invited_user_id; }));
             if (!userIds.length) { list.innerHTML = ''; return; }
             return Api.query('users', 'select=user_id,name,email&user_id=in.(' + userIds.join(',') + ')')
             .then(function(users) {
                 var userMap = {};
                 (users || []).forEach(function(u) { userMap[u.user_id] = u; });
 
-                list.innerHTML = access.map(function(a) {
+                var memberRows = access.map(function(a) {
                     var u = userMap[a.user_id] || { name: 'ไม่ทราบชื่อ', email: '' };
                     var isRoleOwner = a.access_role === 'Owner';
                     return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
@@ -203,6 +208,18 @@ var Pets = (function() {
                         + (isRoleOwner ? '' : '<button onclick="Pets.removeFamilyMember(' + a.user_id + ')" class="ml-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg transition" title="นำออก"><i class="fa-solid fa-user-xmark"></i></button>')
                         + '</div>';
                 }).join('');
+
+                var inviteRows = invitations.map(function(inv) {
+                    var u = userMap[inv.invited_user_id] || { name: 'ไม่ทราบชื่อ', email: '' };
+                    return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
+                        + '<img class="h-9 w-9 rounded-full object-cover opacity-60" src="https://ui-avatars.com/api/?name=' + encodeURIComponent(u.name) + '&background=e0f2fe&color=0369a1" alt="">'
+                        + '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900 truncate">' + u.name + '</p><p class="text-xs text-gray-500 truncate">' + u.email + '</p></div>'
+                        + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">รอตอบรับ</span>'
+                        + '<button onclick="Pets.cancelInvitation(' + inv.invitation_id + ')" class="ml-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg transition" title="ยกเลิกคำเชิญ"><i class="fa-solid fa-xmark"></i></button>'
+                        + '</div>';
+                }).join('');
+
+                list.innerHTML = memberRows + inviteRows;
             });
         })
         .catch(function(err) {
@@ -220,30 +237,22 @@ var Pets = (function() {
         if (!email) { alert('กรุณากรอกอีเมลของสมาชิกที่ต้องการเชิญ'); return; }
         if (!_familyPetId) return;
 
-        Api.rpc('find_user_by_email', { p_email: email })
-        .then(function(result) {
-            var found = Array.isArray(result) ? result[0] : result;
-            if (!found || !found.user_id) {
-                throw new Error('ไม่พบผู้ใช้ที่ใช้อีเมลนี้ในระบบ กรุณาให้สมาชิกลงทะเบียนก่อน แล้วลองอีกครั้ง');
-            }
-            return Api.insert('pet_access', {
-                pet_id: _familyPetId,
-                user_id: found.user_id,
-                access_role: 'Co-caretaker'
-            });
-        })
+        Api.rpc('invite_co_caretaker', { p_pet_id: _familyPetId, p_email: email })
         .then(function() {
             emailInput.value = '';
             loadFamilyMembers();
         })
         .catch(function(err) {
-            var text = (err && err.message) || String(err);
-            if (text.indexOf('duplicate') >= 0 || text.indexOf('pet_access_pkey') >= 0) {
-                text = 'สมาชิกคนนี้อยู่ในรายชื่อผู้ดูแลของสัตว์เลี้ยงตัวนี้อยู่แล้ว';
-            }
-            msg.textContent = text;
+            msg.textContent = (err && err.message) || String(err);
             msg.classList.remove('hidden');
         });
+    }
+
+    function cancelInvitation(invitationId) {
+        if (!confirm('ต้องการยกเลิกคำเชิญนี้หรือไม่?')) return;
+        Api.rpc('cancel_pet_invitation', { p_invitation_id: invitationId })
+        .then(function() { loadFamilyMembers(); })
+        .catch(function(err) { alert('ไม่สามารถยกเลิกคำเชิญได้: ' + (err.message || err)); });
     }
 
     function removeFamilyMember(userId) {
@@ -256,6 +265,7 @@ var Pets = (function() {
 
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove,
-        manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember, removeFamilyMember: removeFamilyMember
+        manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember,
+        removeFamilyMember: removeFamilyMember, cancelInvitation: cancelInvitation
     };
 })();

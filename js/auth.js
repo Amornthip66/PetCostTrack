@@ -116,11 +116,23 @@ var Auth = (function() {
     }
 
     // === User Profile ===
+    // JWT ใช้ Base64URL (มีตัวอักษร - และ _ แทน + และ / และไม่มี padding =)
+    // atob() มาตรฐานรองรับแค่ Base64 ปกติ ถ้าเจอ - หรือ _ จะ throw error ทันที
+    // ต้องแปลงเป็น Base64 ปกติ + เติม padding ก่อนค่อยส่งให้ atob()
+    function base64UrlDecode(str) {
+        str = str.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) { str += '='; }
+        return atob(str);
+    }
+
     function getAuthUserId() {
         var s = getSession();
-        if (!s || !s.access_token) return null;
+        if (!s) return null;
+        // ใช้ user.id จาก session ตรงๆ ก่อน (แม่นยำและเร็วกว่าการถอด JWT เอง)
+        if (s.user && s.user.id) return s.user.id;
+        if (!s.access_token) return null;
         try {
-            var payload = JSON.parse(atob(s.access_token.split('.')[1]));
+            var payload = JSON.parse(base64UrlDecode(s.access_token.split('.')[1]));
             return payload.sub;
         } catch(e) {
             return null;

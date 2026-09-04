@@ -131,10 +131,13 @@ var Pets = (function() {
                 var created = Array.isArray(newPet) ? newPet[0] : newPet;
                 var user = Auth.getUser();
                 if (user && user.user_id && created && created.pet_id) {
+                    // ผู้สร้างสัตว์เลี้ยงตัวนี้ต้องเป็น Owner ของสัตว์เลี้ยงตัวนี้เสมอ
+                    // (ไม่ใช่ role ระดับบัญชีของ user ซึ่งอาจเป็น 'Co-caretaker' ก็ได้)
+                    // มิฉะนั้น pets_delete/pets_update policy (user_is_pet_owner) จะบล็อกไม่ให้แก้ไข/ลบสัตว์เลี้ยงตัวเองในภายหลัง
                     return Api.insert('pet_access', {
                         pet_id: created.pet_id,
                         user_id: user.user_id,
-                        access_role: user.role || 'Owner'
+                        access_role: 'Owner'
                     }).catch(function(err) {
                         console.warn('Could not insert pet_access record:', err);
                     }).then(function() {

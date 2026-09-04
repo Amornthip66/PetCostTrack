@@ -91,14 +91,15 @@
         (function() {
             if (!UI.initPage('budgets')) return;
 
-            // โหลดงบประมาณทันที ไม่ต้องรอ auto-link/โปรไฟล์ผู้ใช้ก่อน (เหมือนหน้า History)
-            Budgets.init();
-
-            Auth.autoLinkUser().then(function() {
-                return Auth.loadProfile();
+            // ต้อง auto-link + โหลดโปรไฟล์ให้เสร็จก่อนค่อยโหลดข้อมูล เพราะ RLS ของ Supabase
+            // กรองข้อมูลตาม auth_user_id() (อ่านจาก users.auth_id = auth.uid()) ถ้ายังไม่ได้
+            // link บัญชีกับแถว users ก่อน query จะไม่เห็นงบประมาณของตัวเองเลย
+            Auth.autoLinkUser().finally(function() {
+                return Auth.loadProfile().catch(function() { return null; });
             }).then(function() {
                 var nav = document.getElementById('mainNav');
                 if (nav) nav.innerHTML = UI.renderNav('budgets');
+                return Budgets.init();
             }).catch(function(err) {
                 console.error('Budgets page init error:', err);
             });

@@ -107,10 +107,19 @@
     <script>
         (function() {
             if (!UI.initPage('history')) return;
+
+            // โหลดรายชื่อสัตว์เลี้ยง/หมวดหมู่/ประวัติรายจ่ายทันที ไม่ต้องรอ auto-link
+            // หรือโหลดโปรไฟล์ผู้ใช้ก่อน เพราะไม่เกี่ยวข้องกัน (ใช้แค่ session token ที่มีอยู่แล้ว)
+            // เดิมบังคับรอ autoLinkUser + loadProfile ให้เสร็จก่อน ทำให้ dropdown สัตว์เลี้ยง
+            // ค้างที่ "กำลังโหลด..." นานเกินจำเป็น
+            History.init();
+
             Auth.autoLinkUser().then(function() {
                 return Auth.loadProfile();
-            }).then(function() { History.init(); })
-            .catch(function(err) {
+            }).then(function() {
+                var nav = document.getElementById('mainNav');
+                if (nav) nav.innerHTML = UI.renderNav('history');
+            }).catch(function(err) {
                 console.error('History page init error:', err);
             });
         })();

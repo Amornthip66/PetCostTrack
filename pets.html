@@ -136,15 +136,15 @@
         (function() {
             if (!UI.initPage('pets')) return;
 
-            // 1. โหลดข้อมูลสัตว์เลี้ยงทันที (รวดเร็ว ไม่ต้องรอ network หลายรอบ)
-            Pets.init();
-
-            // 2. ซิงค์ profile และอัปเดต Navbar เบื้องหลัง
+            // 1. auto-link + โหลดโปรไฟล์ก่อน แล้วค่อยโหลดข้อมูลสัตว์เลี้ยง
+            //    (RLS กรองตาม auth_user_id() ถ้ายังไม่ link บัญชีกับ users จะไม่เห็นสัตว์เลี้ยง)
             Auth.autoLinkUser().finally(function() {
                 return Auth.loadProfile().catch(function() { return null; });
             }).then(function() {
+                // 2. ซิงค์ Navbar แล้วโหลดข้อมูลสัตว์เลี้ยง
                 var nav = document.getElementById('mainNav');
                 if (nav) nav.innerHTML = UI.renderNav('pets');
+                return Pets.init();
             });
         })();
     </script>

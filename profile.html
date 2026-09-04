@@ -9,9 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }</script>
-    <link rel="stylesheet" href="style.css">
-    <style>body { background-color: #f8f6fb; }</style>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }</script>
+    <style>body { background-color: #f8fafc; }</style>
 </head>
 <body class="text-gray-800 antialiased">
     <div id="mainNav"></div>
@@ -21,7 +20,7 @@
 
         <!-- Profile Card -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-            <div class="h-24 bg-gradient-to-r from-pet-DEFAULT to-purple-400"></div>
+            <div class="h-24 bg-gradient-to-r from-pet-DEFAULT to-sky-400"></div>
             <div class="px-6 pb-6">
                 <div class="flex items-end gap-4 -mt-10">
                     <img id="profileAvatar" class="h-20 w-20 rounded-full object-cover border-4 border-white shadow" src="" alt="Avatar">
@@ -57,32 +56,51 @@
             <p id="profileMsg" class="text-green-600 text-sm mt-3 hidden"></p>
         </div>
 
-        <!-- Owned Pets -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800">สัตว์เลี้ยงที่เป็นเจ้าของ</h3>
-                    <p class="text-3xl font-bold text-gray-900 mt-1"><span id="ownedPetCount">—</span> ตัว</p>
-                </div>
-                <div class="p-3 bg-amber-100 rounded-full text-amber-500"><i class="fa-solid fa-dog text-xl"></i></div>
-            </div>
-            <a href="pets.html" class="mt-4 inline-flex items-center text-sm font-medium text-pet-DEFAULT hover:text-pet-dark transition">
-                ดูรายละเอียด <i class="fa-solid fa-arrow-right ml-1.5 text-xs"></i>
-            </a>
-        </div>
-
         <!-- Family Members -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">สมาชิกในครอบครัว</h3>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">สมาชิกในครอบครัว</h3>
+                <button onclick="Profile.openInviteModal()" class="px-3 py-1.5 text-sm bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition"><i class="fa-solid fa-user-plus mr-1"></i>เพิ่มสมาชิกในครอบครัว</button>
+            </div>
             <div id="familyList" class="text-gray-400 text-sm">กำลังโหลด...</div>
         </div>
     </main>
 
+    <!-- Modal เพิ่มสมาชิกในครอบครัว -->
+    <div id="inviteModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75" onclick="Profile.closeInviteModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-1"><i class="fa-solid fa-user-plus mr-2 text-green-600"></i>เพิ่มสมาชิกในครอบครัว</h3>
+                    <p class="text-sm text-gray-500 mb-4">เชิญสมาชิกที่ลงทะเบียนแล้วให้เป็นผู้ร่วมดูแลสัตว์เลี้ยงของคุณ</p>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">อีเมลสมาชิก</label>
+                        <input id="inviteEmail" type="email" placeholder="อีเมลสมาชิกที่ลงทะเบียนแล้ว" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet-DEFAULT outline-none">
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">ให้ดูแลสัตว์เลี้ยง</label>
+                        <div id="invitePetsList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+
+                    <p id="inviteMsg" class="text-red-500 text-sm mt-3 hidden"></p>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                    <button onclick="Profile.addFamilyMember()" class="w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:ml-3">เชิญสมาชิก</button>
+                    <button onclick="Profile.closeInviteModal()" class="mt-3 w-full sm:w-auto px-4 py-2 bg-pet-DEFAULT text-white rounded-lg hover:bg-pet-dark transition sm:mt-0">ยกเลิก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/config.env.js"></script>
-    <script src="js/api.js"></script>
+    <script src="js/api.js?v=3"></script>
     <script src="js/auth.js"></script>
     <script src="js/components.js"></script>
-    <script src="js/profile.js"></script>
+    <script src="js/profile.js?v=2"></script>
     <script>
         (function() {
             if (!UI.initPage('profile')) return;
@@ -91,8 +109,6 @@
             }).then(function() { Profile.init(); })
             .catch(function(err) {
                 console.error('Profile page init error:', err);
-                var familyList = document.getElementById('familyList');
-                if (familyList) familyList.innerHTML = '<p class="text-red-400">โหลดโปรไฟล์ไม่สำเร็จ กรุณารีเฟรชหน้าใหม่</p>';
             });
         })();
     </script>

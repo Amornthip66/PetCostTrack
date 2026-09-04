@@ -43,19 +43,18 @@ select optgroup {
 }
 
 /* ==========================================================================
-   ปุ่มสีม่วงหลัก (bg-pet-DEFAULT #663399): เรืองแสงตอนกดค้าง (active)
-   scope เฉพาะ button/a/input ที่ใช้สีนี้จริงๆ ไม่ให้ไปโดน div ตกแต่งอื่น
-   (เช่น แถบ progress bar งบประมาณที่ก็ใช้ bg-pet-DEFAULT เหมือนกัน)
+   ปุ่มกดทุกแบบ: เรืองแสงตอนกดค้าง (active) 
+   ปรับให้แสดงสีม่วง และมี effect ตอนกด
    ========================================================================== */
-button.bg-pet-DEFAULT,
+button,
 a.bg-pet-DEFAULT,
-input[type="submit"].bg-pet-DEFAULT {
+input[type="submit"] {
     transition: box-shadow .15s ease, background-color .15s ease, transform .1s ease;
 }
 
-button.bg-pet-DEFAULT:active,
+button:active,
 a.bg-pet-DEFAULT:active,
-input[type="submit"].bg-pet-DEFAULT:active {
+input[type="submit"]:active {
     box-shadow: 0 0 0 4px rgba(102, 51, 153, .3), 0 0 20px 6px rgba(102, 51, 153, .65);
     transform: scale(.98);
 }

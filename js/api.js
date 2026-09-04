@@ -4,15 +4,37 @@
  */
 var Api = (function() {
 
+    // อ่าน response อย่างปลอดภัยเสมอ: ห้ามเรียก r.json() ตรงๆ เด็ดขาด
+    // เพราะถ้า body ว่าง (เช่น 204 No Content หรือ DELETE ที่ไม่มี row ถูกลบ)
+    // r.json() จะโยน error "Unexpected end of JSON input" ทันที
+    function safeParse(r) {
+        if (r.status === 204) return Promise.resolve(null);
+        return r.text().then(function(text) {
+            if (!text || !text.trim()) return null;
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn('Response is not valid JSON:', text);
+                return null;
+            }
+        });
+    }
+
+    function throwIfHttpError(r, data, action) {
+        if (!r.ok) {
+            var msg = (data && (data.message || data.error || data.details)) || (action + ' failed (' + r.status + ')');
+            throw new Error(msg);
+        }
+        return data;
+    }
+
     function query(table, params) {
         return fetch(CONFIG.REST + '/' + table + '?' + params, {
             headers: Auth.headers()
         }).then(function(r) {
-            if (!r.ok) throw new Error('API Error: ' + r.status);
-            if (r.status === 204) return [];
-            return r.text().then(function(text) {
-                if (!text || !text.trim()) return [];
-                try { return JSON.parse(text); } catch(e) { return []; }
+            return safeParse(r).then(function(data) {
+                throwIfHttpError(r, data, 'Query');
+                return data || [];
             });
         });
     }
@@ -27,15 +49,8 @@ var Api = (function() {
         }).then(function(r) {
             var range = r.headers.get('content-range');
             if (range) return parseInt(range.split('/')[1]) || 0;
-            if (r.status === 204) return 0;
-            return r.text().then(function(text) {
-                if (!text || !text.trim()) return 0;
-                try {
-                    var d = JSON.parse(text);
-                    return Array.isArray(d) ? d.length : 0;
-                } catch(e) {
-                    return 0;
-                }
+            return safeParse(r).then(function(data) {
+                return Array.isArray(data) ? data.length : 0;
             });
         });
     }
@@ -49,17 +64,8 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            if (r.status === 204) return null;
-            return r.text().then(function(text) {
-                var data = null;
-                if (text && text.trim()) {
-                    try { data = JSON.parse(text); } catch(e) {}
-                }
-                if (!r.ok) {
-                    var msg = (data && (data.message || data.error || data.details)) || 'Insert failed (' + r.status + ')';
-                    throw new Error(msg);
-                }
-                return data;
+            return safeParse(r).then(function(data) {
+                return throwIfHttpError(r, data, 'Insert');
             });
         });
     }
@@ -73,17 +79,8 @@ var Api = (function() {
             }, Auth.headers()),
             body: JSON.stringify(row)
         }).then(function(r) {
-            if (r.status === 204) return null;
-            return r.text().then(function(text) {
-                var data = null;
-                if (text && text.trim()) {
-                    try { data = JSON.parse(text); } catch(e) {}
-                }
-                if (!r.ok) {
-                    var msg = (data && (data.message || data.error || data.details)) || 'Update failed (' + r.status + ')';
-                    throw new Error(msg);
-                }
-                return data;
+            return safeParse(r).then(function(data) {
+                return throwIfHttpError(r, data, 'Update');
             });
         });
     }
@@ -95,15 +92,13 @@ var Api = (function() {
                 'Prefer': 'return=representation'
             }, Auth.headers())
         }).then(function(r) {
-            if (r.status === 204) return null;
-            return r.text().then(function(text) {
-                var data = null;
-                if (text && text.trim()) {
-                    try { data = JSON.parse(text); } catch(e) {}
-                }
-                if (!r.ok) {
-                    var msg = (data && (data.message || data.error || data.details)) || 'Delete failed (' + r.status + ')';
-                    throw new Error(msg);
+            return safeParse(r).then(function(data) {
+                throwIfHttpError(r, data, 'Delete');
+                // Supabase/PostgREST: ถ้าลบ "สำเร็จ" ในแง่ HTTP แต่ไม่มี row ไหนตรงเงื่อนไขเลย
+                // (โดนนโยบาย RLS บล็อก หรือแถวนั้นถูกลบไปแล้วก่อนหน้า) จะได้ array ว่างกลับมา
+                // แทนที่จะปล่อยให้ดูเหมือนลบสำเร็จทั้งที่จริงไม่มีอะไรถูกลบ เราแจ้งเตือนให้ชัดเจน
+                if (Array.isArray(data) && data.length === 0) {
+                    throw new Error('ไม่พบข้อมูลที่จะลบ หรือคุณไม่มีสิทธิ์ลบรายการนี้');
                 }
                 return data;
             });

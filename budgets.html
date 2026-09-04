@@ -17,11 +17,12 @@
     <div id="mainNav"></div>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">งบประมาณ</h1>
                 <p class="text-sm text-gray-500 mt-1">ตั้งงบรายเดือนสำหรับสัตว์เลี้ยงแต่ละตัว</p>
             </div>
+            <button onclick="Budgets.openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition">
             <button onclick="Budgets.openModal()" class="btn btn-primary">
                 <i class="fa-solid fa-plus mr-2"></i> ตั้งงบใหม่
             </button>
@@ -82,6 +83,11 @@
         </div>
     </div>
 
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/components.js?v=20260905"></script>
+    <script src="js/budgets.js"></script>
     <script src="js/config.env.js?v=20260905"></script>
     <script src="js/api.js?v=20260905"></script>
     <script src="js/auth.js?v=20260905"></script>

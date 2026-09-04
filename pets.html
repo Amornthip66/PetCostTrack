@@ -10,9 +10,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#e0f2fe', DEFAULT: '#0ea5e9', dark: '#0369a1', hidden: '#ef4444' } } } } }
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }
     </script>
     <link rel="stylesheet" href="style.css?v=20260905">
+    <style>body { background-color: #f8f6fb; }</style>
     <style>
         :root { --pet: #0ea5e9; --pet-dark: #0369a1; --pet-light: #e0f2fe; }
         body { background-color: #f8fafc; }
@@ -22,11 +23,12 @@
     <div id="mainNav"></div>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">สัตว์เลี้ยงของฉัน</h1>
                 <p class="text-sm text-gray-500 mt-1">จัดการสัตว์เลี้ยงที่คุณดูแล</p>
             </div>
+            <button onclick="Pets.openModal()" class="mt-4 sm:mt-0 w-full sm:w-auto flex items-center justify-center px-5 py-2.5 bg-pet-DEFAULT text-white text-sm font-medium rounded-lg hover:bg-pet-dark transition">
             <button onclick="Pets.openModal()" class="btn btn-primary">
                 <i class="fa-solid fa-plus mr-2"></i> เพิ่มสัตว์เลี้ยง
             </button>
@@ -114,7 +116,7 @@
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-1"><i class="fa-solid fa-users mr-2 text-green-600"></i>จัดการครอบครัว</h3>
+                    <h3 class="text-lg font-medium text-gray-900 mb-1"><i class="fa-solid fa-users mr-2 text-pet-DEFAULT"></i>จัดการครอบครัว</h3>
                     <p class="text-sm text-gray-500 mb-4">ผู้ร่วมดูแล <span id="familyModalPetName" class="font-medium text-gray-700"></span></p>
 
                     <div class="flex gap-2 mb-1">
@@ -134,6 +136,11 @@
         </div>
     </div>
 
+    <script src="js/config.env.js"></script>
+    <script src="js/api.js?v=3"></script>
+    <script src="js/auth.js?v=2"></script>
+    <script src="js/components.js?v=20260905"></script>
+    <script src="js/pets.js?v=3"></script>
     <script src="js/config.env.js?v=20260905"></script>
     <script src="js/api.js?v=20260905"></script>
     <script src="js/auth.js?v=20260905"></script>

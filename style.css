@@ -1,0 +1,61 @@
+/* ==========================================================================
+   PetCostTrack - Shared styles
+   ใช้ร่วมกันทุกหน้า เพื่อให้ <select> (dropdown) หน้าตาเหมือนกันหมด
+   ทันสมัย ใช้งานง่าย ไม่ใช้ลูกศรเริ่มต้นของเบราว์เซอร์ที่ดูเก่า
+   ========================================================================== */
+
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 8 10 12 14 8'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem 1rem;
+    padding-right: 2.5rem !important;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+select:hover {
+    border-color: #663399;
+}
+
+select:focus {
+    outline: none;
+}
+
+select:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+    background-color: #f8f6fb;
+}
+
+select option {
+    color: #1f2937;
+}
+
+select optgroup {
+    font-weight: 600;
+    color: #64748b;
+    font-style: normal;
+}
+
+/* ==========================================================================
+   ปุ่มสีม่วงหลัก (bg-pet-DEFAULT #663399): เรืองแสงตอนกดค้าง (active)
+   scope เฉพาะ button/a/input ที่ใช้สีนี้จริงๆ ไม่ให้ไปโดน div ตกแต่งอื่น
+   (เช่น แถบ progress bar งบประมาณที่ก็ใช้ bg-pet-DEFAULT เหมือนกัน)
+   ========================================================================== */
+button.bg-pet-DEFAULT,
+a.bg-pet-DEFAULT,
+input[type="submit"].bg-pet-DEFAULT {
+    transition: box-shadow .15s ease, background-color .15s ease, transform .1s ease;
+}
+
+button.bg-pet-DEFAULT:active,
+a.bg-pet-DEFAULT:active,
+input[type="submit"].bg-pet-DEFAULT:active {
+    box-shadow: 0 0 0 4px rgba(102, 51, 153, .3), 0 0 20px 6px rgba(102, 51, 153, .65);
+    transform: scale(.98);
+}

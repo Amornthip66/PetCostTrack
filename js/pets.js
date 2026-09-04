@@ -157,29 +157,8 @@ var Pets = (function() {
     function remove(petId) {
         if (!confirm('ต้องการลบสัตว์เลี้ยงตัวนี้จริงหรือไม่?')) return;
         Api.remove('pets', 'pet_id=eq.' + petId)
-            .then(function() {
-                if (typeof UI !== 'undefined' && UI.showToast) {
-                    UI.showToast('ลบสัตว์เลี้ยงสำเร็จแล้ว');
-                }
-                load();
-            })
-            .catch(function(err) {
-                var msg = (err && err.message) ? err.message : String(err);
-                // ถ้าเป็น SyntaxError หรือ JSON input error จาก HTTP 204 ในฐานข้อมูลลบสำเร็จแล้ว 100%!
-                if (msg.indexOf('JSON') >= 0 || msg.indexOf('json') >= 0 || msg.indexOf('Unexpected') >= 0) {
-                    if (typeof UI !== 'undefined' && UI.showToast) {
-                        UI.showToast('ลบสัตว์เลี้ยงสำเร็จแล้ว');
-                    }
-                    load();
-                    return;
-                }
-                console.error('Delete pet error:', err);
-                if (typeof UI !== 'undefined' && UI.showToast) {
-                    UI.showToast('ไม่สามารถลบสัตว์เลี้ยงได้: ' + msg, 'error');
-                } else {
-                    alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + msg);
-                }
-            });
+            .then(function() { load(); })
+            .catch(function(err) { alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + (err.message || err)); });
     }
 
     return { init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove };

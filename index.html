@@ -225,21 +225,22 @@
         (function() {
             if (!UI.initPage('dashboard')) return;
 
-            // ตั้งค่าวันที่ปัจจุบันในฟอร์มเพิ่มรายจ่าย
-            var today = new Date();
-            var dateInput = document.getElementById('formDate');
-            if (dateInput) dateInput.value = today.toISOString().split('T')[0];
-
-            // โหลดข้อมูล dashboard ทันที ไม่ต้องรอ auto-link/โปรไฟล์ผู้ใช้ก่อน
-            // (เหมือนหน้า History/Budgets เพราะ KPI, รายการ, กราฟ ไม่ได้ขึ้นกับโปรไฟล์เลย)
-            Dashboard.init();
-
-            // Auto-link user กับ seed data แล้วโหลดโปรไฟล์แยกไปคู่ขนาน (ใช้แค่อัปเดต Navbar)
-            Auth.autoLinkUser().then(function() {
-                return Auth.loadProfile();
+            // ต้อง auto-link + โหลดโปรไฟล์ให้เสร็จก่อนค่อย init เพราะ RLS ของ Supabase
+            // กรองข้อมูลตาม auth_user_id() (อ่านจาก users.auth_id = auth.uid())
+            // ถ้ายังไม่ได้ link บัญชีกับแถว users ก่อน ค่า auth_user_id() จะเป็น NULL
+            // ทำให้ query ไม่เห็นข้อมูลของตัวเองเลย (หรือเห็นหมดทุกคน ถ้า policy เก่ายังไม่โดนแก้)
+            Auth.autoLinkUser().finally(function() {
+                return Auth.loadProfile().catch(function() { return null; });
             }).then(function() {
                 var nav = document.getElementById('mainNav');
                 if (nav) nav.innerHTML = UI.renderNav('dashboard');
+
+                // ตั้งค่าวันที่ปัจจุบันในฟอร์มเพิ่มรายจ่าย
+                var today = new Date();
+                var dateInput = document.getElementById('formDate');
+                if (dateInput) dateInput.value = today.toISOString().split('T')[0];
+
+                return Dashboard.init();
             }).catch(function(err) {
                 console.error('Init error in dashboard (profile link):', err);
             });

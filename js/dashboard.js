@@ -6,6 +6,7 @@
 var Dashboard = (function() {
 
     var _pets = [];
+    var _categories = [];
     var _chartInstance = null;
 
     // === Helpers ===
@@ -208,6 +209,101 @@ var Dashboard = (function() {
         });
     }
 
+    // === Categories Dropdown (ในฟอร์มเพิ่มรายจ่าย + รองรับสร้างหมวดหมู่เอง ตาม BR-07) ===
+    // ดึงหมวดหมู่แบบกันพัง: ถ้าฐานข้อมูลจริงยังไม่ได้รัน migration
+    // 20260906000000_custom_categories.sql (ที่เพิ่มคอลัมน์ category_type) query แรก
+    // จะ error เพราะคอลัมน์ยังไม่มี — ให้ลองดึงแบบไม่มีคอลัมน์นี้แทน แล้วถือว่าทุกหมวดหมู่
+    // เป็น "หลัก" ไปก่อน แทนที่จะปล่อยให้ dropdown ค้างที่ "กำลังโหลด..." เพราะ query พัง
+    function queryCategoriesResilient() {
+        return Api.query('categories', 'select=category_id,category_name,category_type&order=category_name.asc')
+        .catch(function(err) {
+            console.warn('categories query with category_type failed, falling back (migration not applied yet?):', err);
+            return Api.query('categories', 'select=category_id,category_name&order=category_name.asc')
+            .then(function(cats) {
+                return (cats || []).map(function(c) { c.category_type = c.category_type || 'หลัก'; return c; });
+            });
+        });
+    }
+
+    function loadCategories() {
+        return queryCategoriesResilient()
+        .then(function(cats) {
+            _categories = cats || [];
+            renderCategoryOptions(document.getElementById('formCategory'));
+        }).catch(function(err) {
+            console.error('Load categories error:', err);
+            var sel = document.getElementById('formCategory');
+            if (sel) sel.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+        });
+    }
+
+    function renderCategoryOptions(selectEl, selectedId) {
+        if (!selectEl) return;
+        var main = _categories.filter(function(c) { return c.category_type !== 'แฝง'; });
+        var hidden = _categories.filter(function(c) { return c.category_type === 'แฝง'; });
+        function opts(list) {
+            return list.map(function(c) {
+                var sel = selectedId && String(c.category_id) === String(selectedId) ? ' selected' : '';
+                return '<option value="' + c.category_id + '"' + sel + '>' + c.category_name + '</option>';
+            }).join('');
+        }
+        selectEl.innerHTML = (main.length ? '<optgroup label="รายจ่ายปกติ">' + opts(main) + '</optgroup>' : '')
+            + (hidden.length ? '<optgroup label="ค่าใช้จ่ายแฝง">' + opts(hidden) + '</optgroup>' : '')
+            + '<option value="__new__">+ เพิ่มหมวดหมู่ใหม่...</option>';
+    }
+
+    // เลือก "+ เพิ่มหมวดหมู่ใหม่..." ในดรอปดาวน์ -> เปิดฟอร์มย่อยให้กรอกชื่อ/ประเภท
+    function onCategoryChange() {
+        var sel = document.getElementById('formCategory');
+        var form = document.getElementById('newCategoryForm');
+        if (!sel || !form) return;
+        if (sel.value === '__new__') {
+            form.classList.remove('hidden');
+            var nameInput = document.getElementById('newCategoryName');
+            if (nameInput) nameInput.focus();
+        } else {
+            form.classList.add('hidden');
+        }
+    }
+
+    function cancelAddCategory() {
+        var form = document.getElementById('newCategoryForm');
+        var nameInput = document.getElementById('newCategoryName');
+        var msg = document.getElementById('newCategoryMsg');
+        if (form) form.classList.add('hidden');
+        if (nameInput) nameInput.value = '';
+        if (msg) msg.classList.add('hidden');
+        var sel = document.getElementById('formCategory');
+        if (sel && sel.value === '__new__' && sel.options.length > 1) sel.selectedIndex = 0;
+    }
+
+    function addCategory() {
+        var nameInput = document.getElementById('newCategoryName');
+        var msg = document.getElementById('newCategoryMsg');
+        var typeInput = document.querySelector('input[name="newCategoryType"]:checked');
+        var name = nameInput ? nameInput.value.trim() : '';
+        var type = typeInput ? typeInput.value : 'หลัก';
+        if (msg) msg.classList.add('hidden');
+        if (!name) { alert('กรุณากรอกชื่อหมวดหมู่'); return; }
+
+        Api.insert('categories', { category_name: name, category_type: type })
+        .then(function(created) {
+            var cat = Array.isArray(created) ? created[0] : created;
+            return loadCategories().then(function() {
+                var sel = document.getElementById('formCategory');
+                if (sel && cat) { renderCategoryOptions(sel, cat.category_id); }
+                cancelAddCategory();
+            });
+        })
+        .catch(function(err) {
+            var text = (err && err.message) || String(err);
+            if (text.indexOf('duplicate') >= 0 || text.indexOf('uq_categories_name') >= 0) {
+                text = 'มีหมวดหมู่ชื่อนี้อยู่แล้ว กรุณาเลือกจากรายการ หรือใช้ชื่ออื่น';
+            }
+            if (msg) { msg.textContent = text; msg.classList.remove('hidden'); }
+        });
+    }
+
     // === เปรียบเทียบภาพรวมค่าใช้จ่ายกับเดือน/ปีอื่น (ของสัตว์เลี้ยงตัวเดียวกับที่เลือกไว้) ===
     function summarizeExpenses(data) {
         var total = data.reduce(function(s, e) { return s + Number(e.amount); }, 0);
@@ -327,12 +423,13 @@ var Dashboard = (function() {
         var date = document.getElementById('formDate').value;
         var petId = document.getElementById('formPet').value;
 
-        if (!amount||!date||!petId) {
+        if (!amount||!date||!petId||!catId||catId==='__new__') {
             alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
             return;
         }
 
-        var hidden = [4,5,6].indexOf(Number(catId))>=0;
+        var cat = _categories.find(function(c) { return String(c.category_id) === String(catId); });
+        var hidden = cat ? cat.category_type === 'แฝง' : false;
 
         // Auth.getUser() อาจยังโหลดไม่เสร็จถ้ากดบันทึกเร็วมาก ต้องรอ loadProfile()
         // ซ้ำถ้ายังไม่มี user แทนที่จะพังเงียบๆ ตอนอ่าน user.user_id
@@ -374,7 +471,7 @@ var Dashboard = (function() {
         var compareInput = document.getElementById('filterCompareMonth');
         if (compareInput) compareInput.max = currentYm;
 
-        return loadPets().then(function() {
+        return Promise.all([loadPets(), loadCategories()]).then(function() {
             return applyFilters();
         });
     }
@@ -385,6 +482,10 @@ var Dashboard = (function() {
         loadExpenseList: loadExpenseList,
         loadChart: loadChart,
         loadPets: loadPets,
+        loadCategories: loadCategories,
+        onCategoryChange: onCategoryChange,
+        addCategory: addCategory,
+        cancelAddCategory: cancelAddCategory,
         applyFilters: applyFilters,
         toggleCompare: toggleCompare,
         submitExpense: submitExpense,

@@ -9,10 +9,10 @@
     window.showTab = function(tab) {
         var isLogin = tab === 'login';
         document.getElementById('tabLogin').className = isLogin
-            ? 'flex-1 py-2 rounded-md text-sm font-medium bg-white shadow text-pet-DEFAULT transition'
+            ? 'flex-1 py-2 rounded-md text-sm font-medium bg-white shadow text-pet transition'
             : 'flex-1 py-2 rounded-md text-sm font-medium text-gray-500 transition';
         document.getElementById('tabSignup').className = !isLogin
-            ? 'flex-1 py-2 rounded-md text-sm font-medium bg-white shadow text-pet-DEFAULT transition'
+            ? 'flex-1 py-2 rounded-md text-sm font-medium bg-white shadow text-pet transition'
             : 'flex-1 py-2 rounded-md text-sm font-medium text-gray-500 transition';
         document.getElementById('loginForm').className = isLogin ? '' : 'hidden';
         document.getElementById('signupForm').className = !isLogin ? '' : 'hidden';

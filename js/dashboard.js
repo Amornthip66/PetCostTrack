@@ -243,7 +243,7 @@ var Dashboard = (function() {
         var labelB = THAI_MONTHS_FULL[monthB - 1] + ' ' + (yearB + 543);
 
         function periodCard(label, s, isSelected) {
-            return '<div class="rounded-lg border ' + (isSelected ? 'border-pet-DEFAULT bg-pet-light/40' : 'border-gray-200') + ' p-4">'
+            return '<div class="rounded-lg border ' + (isSelected ? 'border-pet bg-pet-light/40' : 'border-gray-200') + ' p-4">'
                 + '<p class="text-xs font-medium text-gray-500 mb-1">' + (isSelected ? 'ช่วงที่เลือกดู' : 'ช่วงที่เปรียบเทียบ') + '</p>'
                 + '<p class="text-sm font-semibold text-gray-800 mb-3">' + label + '</p>'
                 + '<p class="text-2xl font-bold text-gray-900">฿ ' + fmt(s.total) + '</p>'

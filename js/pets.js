@@ -87,7 +87,7 @@ var Pets = (function() {
                 + '<div class="p-5">'
                 + '<div class="flex items-center justify-between mb-2">'
                 + '<h3 class="text-lg font-bold text-gray-900">' + p.name + '</h3>'
-                + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isOwner ? 'bg-pet-light text-pet-DEFAULT' : 'bg-green-100 text-green-700') + '">' + p.access_role + '</span>'
+                + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isOwner ? 'bg-pet-light text-pet' : 'bg-green-100 text-green-700') + '">' + p.access_role + '</span>'
                 + '</div>'
                 + '<p class="text-sm text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + '</p>'
                 + '<p class="text-sm text-gray-500">' + (p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ') + '</p>'
@@ -95,6 +95,9 @@ var Pets = (function() {
                     + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 px-3 py-1.5 text-sm text-pet-DEFAULT border border-pet-DEFAULT rounded-lg hover:bg-pet-light transition"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
                     + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-pet-DEFAULT border border-pet-DEFAULT rounded-lg hover:bg-pet-light transition" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
                     + '<button onclick="Pets.remove(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-red-500 border border-red-300 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash"></i></button>'
+                    + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
+                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="px-3 py-1.5 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
+                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash"></i></button>'
                     + '</div>' : '')
                 + '</div></div>';
         }).join('');
@@ -199,7 +202,7 @@ var Pets = (function() {
                     return '<div class="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">'
                         + '<img class="h-9 w-9 rounded-full object-cover" src="https://ui-avatars.com/api/?name=' + encodeURIComponent(u.name) + '&background=e0f2fe&color=0369a1" alt="">'
                         + '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900 truncate">' + u.name + '</p><p class="text-xs text-gray-500 truncate">' + u.email + '</p></div>'
-                        + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isRoleOwner ? 'bg-pet-light text-pet-DEFAULT' : 'bg-green-100 text-green-700') + '">' + a.access_role + '</span>'
+                        + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isRoleOwner ? 'bg-pet-light text-pet' : 'bg-green-100 text-green-700') + '">' + a.access_role + '</span>'
                         + (isRoleOwner ? '' : '<button onclick="Pets.removeFamilyMember(' + a.user_id + ')" class="ml-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg transition" title="นำออก"><i class="fa-solid fa-user-xmark"></i></button>')
                         + '</div>';
                 }).join('');

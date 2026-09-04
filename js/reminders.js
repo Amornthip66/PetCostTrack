@@ -3,18 +3,71 @@
  */
 var Reminders = (function() {
 
-    var _pets = [], _categories = [], _reminders = [];
+    var _pets = [], _categories = [], _reminders = [], _invitations = [];
 
     function init() {
         Promise.all([
             Api.query('pets', 'select=pet_id,name'),
-            Api.query('categories', 'select=category_id,category_name')
+            Api.query('categories', 'select=category_id,category_name'),
+            loadInvitations()
         ]).then(function(r) {
             _pets = r[0] || [];
             _categories = r[1] || [];
             populateForm();
             load();
         });
+    }
+
+    // === คำเชิญเป็นผู้ร่วมดูแล (แยกจากรายการแจ้งเตือนปกติ อยู่บนสุดของหน้าเสมอ) ===
+    function loadInvitations() {
+        var user = Auth.getUser();
+        if (!user || !user.user_id) { renderInvitations(); return Promise.resolve(); }
+        return Api.query('pet_invitations',
+            'select=invitation_id,created_at,pets(name),inviter:users!invited_by(name)'
+            + '&invited_user_id=eq.' + user.user_id + '&status=eq.pending&order=created_at.desc'
+        ).then(function(data) {
+            _invitations = data || [];
+            renderInvitations();
+        }).catch(function(err) {
+            console.error('Load invitations error:', err);
+            _invitations = [];
+            renderInvitations();
+        });
+    }
+
+    function renderInvitations() {
+        var section = document.getElementById('invitationsSection');
+        var list = document.getElementById('invitationsList');
+        if (!section || !list) return;
+        if (!_invitations.length) { section.classList.add('hidden'); return; }
+        section.classList.remove('hidden');
+        list.innerHTML = _invitations.map(function(inv) {
+            var petName = inv.pets ? inv.pets.name : 'สัตว์เลี้ยง';
+            var inviterName = inv.inviter ? inv.inviter.name : 'เจ้าของสัตว์เลี้ยง';
+            return '<div class="bg-white rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3 border border-amber-200">'
+                + '<div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-envelope-open-text"></i></div>'
+                + '<div class="flex-1 min-w-0">'
+                + '<p class="text-sm font-semibold text-gray-900">' + inviterName + ' เชิญคุณร่วมดูแล "' + petName + '"</p>'
+                + '<p class="text-xs text-gray-500">' + UI.formatDate(inv.created_at) + '</p>'
+                + '</div>'
+                + '<div class="flex items-center gap-2">'
+                + '<button onclick="Reminders.acceptInvitation(' + inv.invitation_id + ')" class="btn btn-sm btn-primary"><i class="fa-solid fa-check mr-1"></i>ตอบรับ</button>'
+                + '<button onclick="Reminders.declineInvitation(' + inv.invitation_id + ')" class="btn btn-sm btn-secondary"><i class="fa-solid fa-xmark mr-1"></i>ปฏิเสธ</button>'
+                + '</div></div>';
+        }).join('');
+    }
+
+    function acceptInvitation(invitationId) {
+        Api.rpc('accept_pet_invitation', { p_invitation_id: invitationId })
+        .then(function() { return loadInvitations(); })
+        .catch(function(err) { alert('ไม่สามารถตอบรับคำเชิญได้: ' + (err.message || err)); });
+    }
+
+    function declineInvitation(invitationId) {
+        if (!confirm('ต้องการปฏิเสธคำเชิญนี้หรือไม่?')) return;
+        Api.rpc('decline_pet_invitation', { p_invitation_id: invitationId })
+        .then(function() { return loadInvitations(); })
+        .catch(function(err) { alert('ไม่สามารถปฏิเสธคำเชิญได้: ' + (err.message || err)); });
     }
 
     function populateForm() {
@@ -78,5 +131,8 @@ var Reminders = (function() {
         Api.remove('reminders', 'task_id=eq.' + taskId).then(function() { load(); });
     }
 
-    return { init: init, openModal: openModal, closeModal: closeModal, save: save, complete: complete, remove: remove };
+    return {
+        init: init, openModal: openModal, closeModal: closeModal, save: save, complete: complete, remove: remove,
+        acceptInvitation: acceptInvitation, declineInvitation: declineInvitation
+    };
 })();

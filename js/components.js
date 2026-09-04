@@ -77,25 +77,12 @@ var UI = (function() {
         return {i:'fa-receipt',bg:'bg-gray-100',cl:'text-gray-500'};
     }
 
-    function showToast(message, type) {
-        var existing = document.getElementById('appToast');
-        if (existing) existing.remove();
-
-        var isError = type === 'error';
-        var toast = document.createElement('div');
-        toast.id = 'appToast';
-        toast.className = 'fixed bottom-5 right-5 z-50 flex items-center px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium transition-all transform duration-300 '
-            + (isError ? 'bg-red-600' : 'bg-emerald-600');
-        toast.innerHTML = '<i class="fa-solid ' + (isError ? 'fa-circle-xmark' : 'fa-circle-check') + ' mr-2 text-lg"></i>'
-            + '<span>' + message + '</span>';
-        document.body.appendChild(toast);
-
-        setTimeout(function() {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
-            setTimeout(function() { toast.remove(); }, 300);
-        }, 3000);
+    function initPage(activePage) {
+        if (!Auth.requireAuth()) return false;
+        var nav = document.getElementById('mainNav');
+        if (nav) nav.innerHTML = renderNav(activePage);
+        return true;
     }
 
-    return { renderNav: renderNav, initPage: initPage, showToast: showToast, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon };
+    return { renderNav: renderNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon };
 })();

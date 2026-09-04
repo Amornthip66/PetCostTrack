@@ -75,24 +75,7 @@ var Reminders = (function() {
 
     function remove(taskId) {
         if (!confirm('ต้องการลบการแจ้งเตือนนี้จริงหรือไม่?')) return;
-        Api.remove('reminders', 'task_id=eq.' + taskId)
-            .then(function() {
-                if (typeof UI !== 'undefined' && UI.showToast) UI.showToast('ลบการแจ้งเตือนสำเร็จแล้ว');
-                load();
-            })
-            .catch(function(err) {
-                var msg = (err && err.message) ? err.message : String(err);
-                if (msg.indexOf('JSON') >= 0 || msg.indexOf('json') >= 0 || msg.indexOf('Unexpected') >= 0) {
-                    if (typeof UI !== 'undefined' && UI.showToast) UI.showToast('ลบการแจ้งเตือนสำเร็จแล้ว');
-                    load();
-                    return;
-                }
-                if (typeof UI !== 'undefined' && UI.showToast) {
-                    UI.showToast('ไม่สามารถลบได้: ' + msg, 'error');
-                } else {
-                    alert('ไม่สามารถลบได้: ' + msg);
-                }
-            });
+        Api.remove('reminders', 'task_id=eq.' + taskId).then(function() { load(); });
     }
 
     return { init: init, openModal: openModal, closeModal: closeModal, save: save, complete: complete, remove: remove };

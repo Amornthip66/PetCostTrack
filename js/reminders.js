@@ -41,8 +41,8 @@ var Reminders = (function() {
             var isDue = r.next_due_date <= today && !r.is_completed;
             var isDone = r.is_completed;
             var cat = r.categories ? r.categories.category_name : '';
-            return '<div class="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 border-l-4 ' + (isDone ? 'border-gray-300' : isDue ? 'border-red-500' : 'border-pet-DEFAULT') + ' transition hover:shadow-md">'
-                + '<div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ' + (isDone ? 'bg-gray-100 text-gray-400' : isDue ? 'bg-red-100 text-red-500' : 'bg-pet-DEFAULT text-white') + '"><i class="fa-solid ' + (isDone ? 'fa-check' : 'fa-bell') + '"></i></div>'
+            return '<div class="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 border-l-4 ' + (isDone ? 'border-gray-300' : isDue ? 'border-red-500' : 'border-pet') + ' transition hover:shadow-md">'
+                + '<div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ' + (isDone ? 'bg-gray-100 text-gray-400' : isDue ? 'bg-red-100 text-red-500' : 'bg-pet text-white') + '"><i class="fa-solid ' + (isDone ? 'fa-check' : 'fa-bell') + '"></i></div>'
                 + '<div class="flex-1 min-w-0">'
                 + '<p class="text-sm font-semibold ' + (isDone ? 'text-gray-400 line-through' : 'text-gray-900') + '">' + cat + '</p>'
                 + '<p class="text-xs text-gray-500">' + (r.pets ? r.pets.name : '') + ' • ' + r.frequency + ' • ครบกำหนด ' + UI.formatDate(r.next_due_date) + '</p>'

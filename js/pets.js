@@ -25,10 +25,14 @@ var Pets = (function() {
     }
 
     // ดึงคอลัมน์ครบชุด (type/gender/breed/weight/birthdate/adoption_date/microchip)
-    // เพื่อให้เปิดฟอร์มแก้ไขแล้วเห็นค่าที่กรอกไว้ครบ — ถ้าฐานข้อมูลจริงยังไม่ได้รัน
-    // migration 20260905000000_update_pets.sql (คอลัมน์เหล่านี้ยังไม่มี) ให้ถอยกลับไป
-    // ดึงแค่ชุดคอลัมน์เดิมแทน กันหน้ารายชื่อสัตว์เลี้ยงพังทั้งหน้า
-    var PET_FIELDS_FULL = 'pet_id,name,type_breed,type,gender,breed,age,weight,birthdate,adoption_date,microchip';
+    // เพื่อให้เปิดฟอร์มแก้ไขแล้วเห็นค่าที่กรอกไว้ครบ — ถ้าฐานข้อมูลจริงไม่มีคอลัมน์
+    // เหล่านี้เลย ให้ถอยกลับไปดึงแค่ชุดคอลัมน์เดิมแทน กันหน้ารายชื่อสัตว์เลี้ยงพังทั้งหน้า
+    // ส่วนชื่อคอลัมน์จริงในตาราง pets ไม่ตรงกับที่ mapPet()/openModal() ใช้กัน (ของจริง
+    // ในฐานข้อมูลตั้งชื่อ pet_type/weight_kg/birth_date/microchip_id ไม่ใช่ type/weight/
+    // birthdate/microchip ดูรายละเอียดที่ 20260910000000_fix_pet_schema_drift.sql) เลยใช้
+    // PostgREST column alias (alias:column) แปลงชื่อกลับตอน query แทนที่จะไปแก้
+    // mapPet()/openModal() ทุกจุด
+    var PET_FIELDS_FULL = 'pet_id,name,type_breed,type:pet_type,gender,breed,age,weight:weight_kg,birthdate:birth_date,adoption_date,microchip:microchip_id';
     var PET_FIELDS_BASIC = 'pet_id,name,type_breed,age';
 
     function queryPetsWithFallback() {
@@ -133,11 +137,25 @@ var Pets = (function() {
         }).join('');
     }
 
+    // chk_pets_gender ในฐานข้อมูลจริงยอมรับเฉพาะค่าภาษาอังกฤษ (Male/Female)
+    // แต่ dropdown ในฟอร์มใช้ค่าภาษาไทย (ผู้/เมีย) ต้องแปลงไปมาตรงนี้
+    function mapGenderToDb(genderUi) {
+        if (genderUi === 'ผู้') return 'Male';
+        if (genderUi === 'เมีย') return 'Female';
+        return genderUi;
+    }
+
+    function mapGenderToUi(genderDb) {
+        if (genderDb === 'Male') return 'ผู้';
+        if (genderDb === 'Female') return 'เมีย';
+        return genderDb || '';
+    }
+
     function openModal(pet) {
         document.getElementById('formPetId').value = pet ? pet.pet_id : '';
         document.getElementById('formPetName').value = pet ? pet.name : '';
         document.getElementById('formPetType').value = pet ? (pet.type || '') : '';
-        document.getElementById('formPetGender').value = pet ? (pet.gender || '') : '';
+        document.getElementById('formPetGender').value = pet ? mapGenderToUi(pet.gender) : '';
         document.getElementById('formPetBreed').value = pet ? (pet.breed || pet.type_breed || '') : '';
         document.getElementById('formPetAge').value = pet ? (pet.age || '') : '';
         document.getElementById('formPetWeight').value = pet ? (pet.weight || '') : '';
@@ -158,44 +176,51 @@ var Pets = (function() {
     function save() {
         var id = document.getElementById('formPetId').value;
         var breed = document.getElementById('formPetBreed').value.trim() || null;
-        var data = {
-            name: document.getElementById('formPetName').value.trim(),
-            type: document.getElementById('formPetType').value.trim(),
-            gender: document.getElementById('formPetGender').value,
-            type_breed: breed,
-            breed: breed,
-            age: document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null,
-            weight: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
-            birthdate: document.getElementById('formPetBirthdate').value || null,
-            adoption_date: document.getElementById('formPetAdoptionDate').value || null,
-            microchip: document.getElementById('formPetMicrochip').value.trim() || null
-        };
-        if (!data.name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
-        if (!data.type) { alert('กรุณากรอกประเภทสัตว์เลี้ยง'); return; }
-        if (!data.gender) { alert('กรุณาเลือกเพศ'); return; }
-        if (data.age === null) { alert('กรุณากรอกอายุ'); return; }
+        var genderUi = document.getElementById('formPetGender').value;
+        var typeVal = document.getElementById('formPetType').value.trim();
+        var ageVal = document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null;
+        var name = document.getElementById('formPetName').value.trim();
+        if (!name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
+        if (!typeVal) { alert('กรุณากรอกประเภทสัตว์เลี้ยง'); return; }
+        if (!genderUi) { alert('กรุณาเลือกเพศ'); return; }
+        if (ageVal === null) { alert('กรุณากรอกอายุ'); return; }
 
         var promise;
         if (id) {
-            promise = Api.update('pets', 'pet_id=eq.' + id, data);
+            // แก้ไขสัตว์เลี้ยงเดิม: ใช้ชื่อคอลัมน์จริงในตาราง pets (ไม่ตรงกับชื่อที่
+            // migration ในโค้ดสมมติไว้ — ของจริงคือ pet_type/weight_kg/birth_date/
+            // microchip_id ดูรายละเอียดที่ 20260910000000_fix_pet_schema_drift.sql)
+            promise = Api.update('pets', 'pet_id=eq.' + id, {
+                name: name,
+                pet_type: typeVal,
+                gender: mapGenderToDb(genderUi),
+                type_breed: breed,
+                breed: breed,
+                age: ageVal,
+                weight_kg: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
+                birth_date: document.getElementById('formPetBirthdate').value || null,
+                adoption_date: document.getElementById('formPetAdoptionDate').value || null,
+                microchip_id: document.getElementById('formPetMicrochip').value.trim() || null
+            });
         } else {
             // ใช้ RPC create_pet_with_owner แทนการ insert pets + pet_access แยกกัน 2 request
             // เพราะถ้า insert เข้า pets เฉยๆ ก่อน แถวที่เพิ่ง insert จะยังไม่มีสิทธิ์ใน
             // pet_access เลย ทำให้ Postgres ปฏิเสธตอน RETURNING แถวกลับมาด้วย error
             // "new row violates row-level security policy for table pets" (ดูรายละเอียด
             // ที่ migration 20260909000000_create_pet_with_owner.sql) — ฟังก์ชันนี้ insert
-            // ทั้งสองตารางในทรานแซกชันเดียวกัน ปิดช่องว่างนั้นไปเลย
+            // ทั้งสองตารางในทรานแซกชันเดียวกัน ปิดช่องว่างนั้นไปเลย (ฟังก์ชันแปลงค่า
+            // เพศเป็นภาษาอังกฤษให้เองอยู่แล้วด้วย)
             promise = Api.rpc('create_pet_with_owner', {
-                p_name: data.name,
-                p_type: data.type,
-                p_gender: data.gender,
-                p_age: data.age,
-                p_type_breed: data.type_breed,
-                p_breed: data.breed,
-                p_weight: data.weight,
-                p_birthdate: data.birthdate,
-                p_adoption_date: data.adoption_date,
-                p_microchip: data.microchip
+                p_name: name,
+                p_type: typeVal,
+                p_gender: mapGenderToDb(genderUi),
+                p_age: ageVal,
+                p_type_breed: breed,
+                p_breed: breed,
+                p_weight: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
+                p_birthdate: document.getElementById('formPetBirthdate').value || null,
+                p_adoption_date: document.getElementById('formPetAdoptionDate').value || null,
+                p_microchip: document.getElementById('formPetMicrochip').value.trim() || null
             });
         }
 

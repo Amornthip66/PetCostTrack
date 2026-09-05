@@ -127,12 +127,14 @@ var Pets = (function() {
                 + '</div>'
                 + '<p class="text-sm text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + '</p>'
                 + '<p class="text-sm text-gray-500">' + (p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ') + '</p>'
-                + (isOwner ? '<div class="mt-4 flex gap-2">'
+                // Co-caretaker แก้ไขข้อมูลโปรไฟล์สัตว์เลี้ยงได้ แต่จัดการครอบครัว/เก็บเข้าคลัง/
+                // ลบถาวรได้เฉพาะ Owner เท่านั้น (บังคับจริงที่ RLS ฝั่งฐานข้อมูลด้วย ไม่ใช่แค่ซ่อนปุ่ม)
+                + '<div class="mt-4 flex gap-2">'
                     + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
-                    + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
+                    + (isOwner ? '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
                     + '<button onclick="Pets.archive(' + p.pet_id + ')" class="btn btn-sm btn-warning" title="เก็บเข้าคลัง"><i class="fa-solid fa-box-archive"></i></button>'
-                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger" title="ลบถาวร"><i class="fa-solid fa-trash"></i></button>'
-                    + '</div>' : '')
+                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger" title="ลบถาวร"><i class="fa-solid fa-trash"></i></button>' : '')
+                    + '</div>'
                 + '</div></div>';
         }).join('');
     }

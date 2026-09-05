@@ -59,10 +59,12 @@
                             <th class="px-4 py-3 text-left font-medium">หมวดหมู่</th>
                             <th class="px-4 py-3 text-left font-medium">ประเภท</th>
                             <th class="px-4 py-3 text-right font-medium">จำนวนเงิน</th>
+                            <th class="px-4 py-3 text-center font-medium">ใบเสร็จ</th>
+                            <th class="px-4 py-3 text-right font-medium">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody id="historyTable" class="divide-y divide-gray-100">
-                        <tr><td colspan="7" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>
+                        <tr><td colspan="9" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -76,7 +78,7 @@
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">บันทึกรายจ่ายใหม่</h3>
+                    <h3 id="expenseModalTitle" class="text-lg font-medium text-gray-900 mb-4">บันทึกรายจ่ายใหม่</h3>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">หมวดหมู่ <span class="text-red-500">*</span></label>
@@ -102,6 +104,14 @@
                             <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         </div>
                         <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">ใบเสร็จ (ถ้ามี)</label>
+                            <div id="currentReceiptWrap" class="hidden mt-1 mb-2">
+                                <button type="button" onclick="History.viewCurrentReceipt()" class="text-sm text-pet underline"><i class="fa-solid fa-receipt mr-1"></i>ดูใบเสร็จปัจจุบัน</button>
+                            </div>
+                            <input id="formReceipt" type="file" accept="image/jpeg,image/jpg,image/png" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
+                            <p class="text-xs text-gray-400 mt-1">รองรับไฟล์ .jpg, .jpeg, .png เท่านั้น — เลือกไฟล์ใหม่เพื่อแทนที่ใบเสร็จเดิม</p>
+                        </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
@@ -112,11 +122,26 @@
         </div>
     </div>
 
-    <script src="js/config.env.js?v=20260905"></script>
-    <script src="js/api.js?v=20260905"></script>
+    <!-- Modal ดูรูปใบเสร็จ -->
+    <div id="receiptModal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen p-4 text-center">
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-75" onclick="History.closeReceiptModal()"></div>
+            <div class="relative inline-block align-middle bg-white rounded-xl shadow-xl max-w-lg w-full p-4 text-left">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-medium text-gray-900">ใบเสร็จ</h3>
+                    <button onclick="History.closeReceiptModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+                <p id="receiptModalMsg" class="text-sm text-gray-400 text-center py-8 hidden">กำลังโหลด...</p>
+                <img id="receiptImage" src="" class="w-full rounded-lg hidden" alt="ใบเสร็จ">
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.env.js?v=20260913"></script>
+    <script src="js/api.js?v=20260913"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
-    <script src="js/history.js?v=20260912"></script>
+    <script src="js/history.js?v=20260913"></script>
     <script>
         (function() {
             if (!UI.initPage('history')) return;

@@ -24,6 +24,38 @@ var Pets = (function() {
         });
     }
 
+    // ดึงคอลัมน์ครบชุด (type/gender/breed/weight/birthdate/adoption_date/microchip)
+    // เพื่อให้เปิดฟอร์มแก้ไขแล้วเห็นค่าที่กรอกไว้ครบ — ถ้าฐานข้อมูลจริงยังไม่ได้รัน
+    // migration 20260905000000_update_pets.sql (คอลัมน์เหล่านี้ยังไม่มี) ให้ถอยกลับไป
+    // ดึงแค่ชุดคอลัมน์เดิมแทน กันหน้ารายชื่อสัตว์เลี้ยงพังทั้งหน้า
+    var PET_FIELDS_FULL = 'pet_id,name,type_breed,type,gender,breed,age,weight,birthdate,adoption_date,microchip';
+    var PET_FIELDS_BASIC = 'pet_id,name,type_breed,age';
+
+    function queryPetsWithFallback() {
+        return queryActivePetsResilient('select=' + PET_FIELDS_FULL)
+        .catch(function(err) {
+            console.warn('pets query with extended fields failed, falling back to basic fields:', err);
+            return queryActivePetsResilient('select=' + PET_FIELDS_BASIC);
+        });
+    }
+
+    function mapPet(p, accessRole) {
+        return {
+            pet_id: p.pet_id,
+            name: p.name,
+            type_breed: p.type_breed,
+            type: p.type,
+            gender: p.gender,
+            breed: p.breed,
+            age: p.age,
+            weight: p.weight,
+            birthdate: p.birthdate,
+            adoption_date: p.adoption_date,
+            microchip: p.microchip,
+            access_role: accessRole
+        };
+    }
+
     function load() {
         var grid = document.getElementById('petsGrid');
         if (grid) {
@@ -35,7 +67,7 @@ var Pets = (function() {
 
         // ดึงข้อมูลสัตว์เลี้ยงทั้งหมดทันทีในคำขอเดียว (รวดเร็วมาก)
         // ไม่รวมตัวที่เก็บเข้าคลังแล้ว (is_archived=true) — ดูได้ที่หน้าโปรไฟล์แทน
-        var petsPromise = queryActivePetsResilient('select=pet_id,name,type_breed,age');
+        var petsPromise = queryPetsWithFallback();
 
         // ดึงสิทธิ์ pet_access คู่ขนานกันเฉพาะกรณีที่มี userId ป้องกัน user_id=eq.undefined
         var accessPromise = userId
@@ -50,29 +82,15 @@ var Pets = (function() {
             access.forEach(function(a) { if (a && a.pet_id) accessMap[a.pet_id] = a.access_role; });
 
             _pets = pets.map(function(p) {
-                return {
-                    pet_id: p.pet_id,
-                    name: p.name,
-                    type_breed: p.type_breed,
-                    age: p.age,
-                    access_role: accessMap[p.pet_id] || (user && user.role ? user.role : 'Owner')
-                };
+                return mapPet(p, accessMap[p.pet_id] || (user && user.role ? user.role : 'Owner'));
             });
             render();
         }).catch(function(err) {
             console.error('Pets load error:', err);
             // Fallback: หาก query คู่ขนานมีปัญหา ให้ดึงเฉพาะ pets ตารางหลักตรงๆ
-            return queryActivePetsResilient('select=pet_id,name,type_breed,age')
+            return queryPetsWithFallback()
             .then(function(pets) {
-                _pets = (pets || []).map(function(p) {
-                    return {
-                        pet_id: p.pet_id,
-                        name: p.name,
-                        type_breed: p.type_breed,
-                        age: p.age,
-                        access_role: 'Owner'
-                    };
-                });
+                _pets = (pets || []).map(function(p) { return mapPet(p, 'Owner'); });
                 render();
             }).catch(function(e) {
                 console.error('Fatal load pets error:', e);
@@ -118,8 +136,14 @@ var Pets = (function() {
     function openModal(pet) {
         document.getElementById('formPetId').value = pet ? pet.pet_id : '';
         document.getElementById('formPetName').value = pet ? pet.name : '';
-        document.getElementById('formPetBreed').value = pet ? (pet.type_breed || '') : '';
+        document.getElementById('formPetType').value = pet ? (pet.type || '') : '';
+        document.getElementById('formPetGender').value = pet ? (pet.gender || '') : '';
+        document.getElementById('formPetBreed').value = pet ? (pet.breed || pet.type_breed || '') : '';
         document.getElementById('formPetAge').value = pet ? (pet.age || '') : '';
+        document.getElementById('formPetWeight').value = pet ? (pet.weight || '') : '';
+        document.getElementById('formPetBirthdate').value = pet ? (pet.birthdate || '') : '';
+        document.getElementById('formPetAdoptionDate').value = pet ? (pet.adoption_date || '') : '';
+        document.getElementById('formPetMicrochip').value = pet ? (pet.microchip || '') : '';
         document.getElementById('petModalTitle').textContent = pet ? 'แก้ไขสัตว์เลี้ยง' : 'เพิ่มสัตว์เลี้ยงใหม่';
         document.getElementById('petModal').classList.remove('hidden');
     }
@@ -133,32 +157,45 @@ var Pets = (function() {
 
     function save() {
         var id = document.getElementById('formPetId').value;
+        var breed = document.getElementById('formPetBreed').value.trim() || null;
         var data = {
             name: document.getElementById('formPetName').value.trim(),
-            type_breed: document.getElementById('formPetBreed').value.trim() || null,
-            age: document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null
+            type: document.getElementById('formPetType').value.trim(),
+            gender: document.getElementById('formPetGender').value,
+            type_breed: breed,
+            breed: breed,
+            age: document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null,
+            weight: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
+            birthdate: document.getElementById('formPetBirthdate').value || null,
+            adoption_date: document.getElementById('formPetAdoptionDate').value || null,
+            microchip: document.getElementById('formPetMicrochip').value.trim() || null
         };
         if (!data.name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
+        if (!data.type) { alert('กรุณากรอกประเภทสัตว์เลี้ยง'); return; }
+        if (!data.gender) { alert('กรุณาเลือกเพศ'); return; }
+        if (data.age === null) { alert('กรุณากรอกอายุ'); return; }
 
         var promise;
         if (id) {
             promise = Api.update('pets', 'pet_id=eq.' + id, data);
         } else {
-            promise = Api.insert('pets', data).then(function(newPet) {
-                var created = Array.isArray(newPet) ? newPet[0] : newPet;
-                var user = Auth.getUser();
-                if (user && user.user_id && created && created.pet_id) {
-                    return Api.insert('pet_access', {
-                        pet_id: created.pet_id,
-                        user_id: user.user_id,
-                        access_role: user.role || 'Owner'
-                    }).catch(function(err) {
-                        console.warn('Could not insert pet_access record:', err);
-                    }).then(function() {
-                        return created;
-                    });
-                }
-                return created;
+            // ใช้ RPC create_pet_with_owner แทนการ insert pets + pet_access แยกกัน 2 request
+            // เพราะถ้า insert เข้า pets เฉยๆ ก่อน แถวที่เพิ่ง insert จะยังไม่มีสิทธิ์ใน
+            // pet_access เลย ทำให้ Postgres ปฏิเสธตอน RETURNING แถวกลับมาด้วย error
+            // "new row violates row-level security policy for table pets" (ดูรายละเอียด
+            // ที่ migration 20260909000000_create_pet_with_owner.sql) — ฟังก์ชันนี้ insert
+            // ทั้งสองตารางในทรานแซกชันเดียวกัน ปิดช่องว่างนั้นไปเลย
+            promise = Api.rpc('create_pet_with_owner', {
+                p_name: data.name,
+                p_type: data.type,
+                p_gender: data.gender,
+                p_age: data.age,
+                p_type_breed: data.type_breed,
+                p_breed: data.breed,
+                p_weight: data.weight,
+                p_birthdate: data.birthdate,
+                p_adoption_date: data.adoption_date,
+                p_microchip: data.microchip
             });
         }
 

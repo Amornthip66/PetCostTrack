@@ -20,7 +20,7 @@ var History = (function() {
             // "กำลังโหลด..." เงียบๆ ตลอดไป ต้องแจ้ง error ให้เห็นชัดเจน
             console.error('History init error:', err);
             var tbody = document.getElementById('historyTable');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
             var formPet = document.getElementById('formPet');
             if (formPet) formPet.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
             var formCat = document.getElementById('formCategory');
@@ -177,22 +177,32 @@ var History = (function() {
         // รวมเป็น pets(pet_id,name) ที่เดียว และใช้ !inner ตอนกรองเพื่อให้กรองแถวหลักได้จริง
         var petsJoin = pet ? 'pets!inner(pet_id,name)' : 'pets(pet_id,name)';
         var catJoin = cat ? 'categories!inner(category_name,category_id)' : 'categories(category_name,category_id)';
-        var params = 'select=transaction_id,amount,expense_date,expense_type,expense_note,'
-            + petsJoin + ',users(name),' + catJoin + '&order=expense_date.desc&limit=100';
+        var commonFields = petsJoin + ',users(name),' + catJoin;
+        // recorded_by_role เป็นคอลัมน์ใหม่ (migration 20260912000000) เก็บสิทธิ์ของ
+        // ผู้บันทึก ณ ตอนสร้างรายการไว้ถาวร ใช้ระบายสีป้ายชื่อผู้บันทึก — ถ้าฐานข้อมูลจริง
+        // ยังไม่ได้รัน migration นี้ ให้ถอยไปดึงแบบไม่มีคอลัมน์นี้แทน กันหน้าพังทั้งหน้า
+        var fieldsFull = 'transaction_id,amount,expense_date,expense_type,expense_note,recorded_by_role,' + commonFields;
+        var fieldsBasic = 'transaction_id,amount,expense_date,expense_type,expense_note,' + commonFields;
+        var filterParams = '&order=expense_date.desc&limit=100';
 
-        if (type) params += '&expense_type=eq.' + encodeURIComponent(type);
-        if (pet) params += '&pets.pet_id=eq.' + pet;
-        if (cat) params += '&categories.category_id=eq.' + cat;
+        if (type) filterParams += '&expense_type=eq.' + encodeURIComponent(type);
+        if (pet) filterParams += '&pets.pet_id=eq.' + pet;
+        if (cat) filterParams += '&categories.category_id=eq.' + cat;
 
         var tbody = document.getElementById('historyTable');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
 
-        Api.query('expenses', params).then(function(data) {
+        Api.query('expenses', 'select=' + fieldsFull + filterParams)
+        .catch(function(err) {
+            console.warn('expenses query with recorded_by_role failed, falling back (migration not applied yet?):', err);
+            return Api.query('expenses', 'select=' + fieldsBasic + filterParams);
+        })
+        .then(function(data) {
             _expenses = data || [];
             render();
         }).catch(function(err) {
             console.error('Load history error:', err);
-            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-red-400">โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err) + '</td></tr>';
         });
     }
 
@@ -202,17 +212,19 @@ var History = (function() {
         document.getElementById('totalFiltered').textContent = '฿ ' + UI.fmt(total);
 
         if (!_expenses.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">ไม่มีรายการ</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400">ไม่มีรายการ</td></tr>';
             return;
         }
         tbody.innerHTML = _expenses.map(function(e) {
             var cat = e.categories ? e.categories.category_name : '';
             var icon = UI.getIcon(cat);
             var hidden = e.expense_type === 'แฝง';
+            var recorderName = e.users ? e.users.name : '';
             return '<tr class="hover:bg-gray-50 transition">'
                 + '<td class="px-4 py-3 text-gray-600 whitespace-nowrap">' + UI.formatDate(e.expense_date) + '</td>'
                 + '<td class="px-4 py-3"><span class="font-medium">' + (e.expense_note || cat) + '</span></td>'
                 + '<td class="px-4 py-3 text-gray-600">' + (e.pets ? e.pets.name : '—') + '</td>'
+                + '<td class="px-4 py-3">' + UI.recorderBadge(recorderName, e.recorded_by_role) + '</td>'
                 + '<td class="px-4 py-3"><span class="inline-flex items-center gap-1"><i class="fa-solid ' + icon.i + ' text-xs ' + icon.cl + '"></i> ' + cat + '</span></td>'
                 + '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (hidden ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600') + '">' + (hidden ? 'แฝง' : 'ปกติ') + '</span></td>'
                 + '<td class="px-4 py-3 text-right font-bold ' + (hidden ? 'text-red-600' : 'text-gray-900') + '">฿ ' + UI.fmt(e.amount) + '</td>'

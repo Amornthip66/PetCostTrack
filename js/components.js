@@ -116,5 +116,17 @@ var UI = (function() {
         return true;
     }
 
-    return { renderNav: renderNav, toggleMobileNav: toggleMobileNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon };
+    // ป้ายชื่อผู้บันทึกรายจ่าย แยกสีตามสิทธิ์ ณ ตอนที่บันทึก (Owner/Co-caretaker)
+    // ใช้สีชุดเดียวกับป้ายบทบาทในหน้าสัตว์เลี้ยง (pets.js) เพื่อให้สื่อความหมาย
+    // เดียวกันทั้งแอป — role ที่ส่งมาคือค่า snapshot จาก expenses.recorded_by_role
+    // ไม่ใช่สิทธิ์ปัจจุบัน จึงยังถูกต้องแม้ผู้บันทึกจะถูกถอดสิทธิ์ไปแล้วภายหลัง
+    function recorderBadge(name, role) {
+        var label = name || 'ไม่ทราบชื่อ';
+        var cls = role === 'Owner' ? 'bg-pet-light text-pet'
+            : role === 'Co-caretaker' ? 'bg-green-100 text-green-700'
+            : 'bg-gray-100 text-gray-500';
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + cls + '">' + label + '</span>';
+    }
+
+    return { renderNav: renderNav, toggleMobileNav: toggleMobileNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon, recorderBadge: recorderBadge };
 })();

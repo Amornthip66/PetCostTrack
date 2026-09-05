@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { pet: { light: '#f2ebfa', DEFAULT: '#663399', dark: '#4b2673', hidden: '#ef4444' } } } } }</script>
-    <link rel="stylesheet" href="style.css?v=20260905">
+    <link rel="stylesheet" href="style.css?v=20260909">
     <style>body { background-color: #f8f6fb; }</style>
 </head>
 <body class="text-gray-800 antialiased">
@@ -65,6 +65,13 @@
             </div>
             <div id="familyList" class="text-gray-400 text-sm">กำลังโหลด...</div>
         </div>
+
+        <!-- Pet Archive -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-1"><i class="fa-solid fa-box-archive mr-2 text-gray-400"></i>คลังสัตว์เลี้ยง</h3>
+            <p class="text-sm text-gray-500 mb-4">สัตว์เลี้ยงที่เก็บเข้าคลังแล้ว (เสียชีวิต/ย้ายไปอยู่ในความดูแลของผู้อื่น) ประวัติค่าใช้จ่ายเดิมยังอยู่ครบ</p>
+            <div id="petArchiveList" class="text-gray-400 text-sm">กำลังโหลด...</div>
+        </div>
     </main>
 
     <!-- Modal เพิ่มสมาชิกในครอบครัว -->
@@ -101,7 +108,7 @@
     <script src="js/api.js?v=20260905"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260905"></script>
-    <script src="js/profile.js?v=20260907"></script>
+    <script src="js/profile.js?v=20260908"></script>
     <script>
         (function() {
             if (!UI.initPage('profile')) return;

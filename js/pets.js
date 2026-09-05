@@ -6,9 +6,22 @@ var Pets = (function() {
 
     var _pets = [];
     var _familyPetId = null;
+    var _archivePetId = null;
 
     function init() {
         return load();
+    }
+
+    // ดึงสัตว์เลี้ยงที่ยังไม่ถูกเก็บเข้าคลังแบบกันพัง: ถ้าฐานข้อมูลจริงยังไม่ได้รัน
+    // migration 20260908000000_pet_archive.sql (ที่เพิ่มคอลัมน์ is_archived) query แรก
+    // จะ error เพราะคอลัมน์ยังไม่มี — ให้ลองดึงแบบไม่กรองคอลัมน์นี้แทน (เห็นสัตว์เลี้ยงครบ
+    // ทุกตัวไปก่อน) แทนที่จะปล่อยให้หน้ารายชื่อสัตว์เลี้ยงพังทั้งหน้าเพราะ query เดียวพัง
+    function queryActivePetsResilient(selectFields) {
+        return Api.query('pets', selectFields + '&is_archived=eq.false&order=pet_id.asc')
+        .catch(function(err) {
+            console.warn('pets query with is_archived failed, falling back (migration not applied yet?):', err);
+            return Api.query('pets', selectFields + '&order=pet_id.asc');
+        });
     }
 
     function load() {
@@ -21,11 +34,12 @@ var Pets = (function() {
         var userId = (user && user.user_id) ? user.user_id : null;
 
         // ดึงข้อมูลสัตว์เลี้ยงทั้งหมดทันทีในคำขอเดียว (รวดเร็วมาก)
-        var petsPromise = Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc');
-        
+        // ไม่รวมตัวที่เก็บเข้าคลังแล้ว (is_archived=true) — ดูได้ที่หน้าโปรไฟล์แทน
+        var petsPromise = queryActivePetsResilient('select=pet_id,name,type_breed,age');
+
         // ดึงสิทธิ์ pet_access คู่ขนานกันเฉพาะกรณีที่มี userId ป้องกัน user_id=eq.undefined
-        var accessPromise = userId 
-            ? Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId).catch(function() { return []; }) 
+        var accessPromise = userId
+            ? Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + userId).catch(function() { return []; })
             : Promise.resolve([]);
 
         return Promise.all([petsPromise, accessPromise])
@@ -48,7 +62,7 @@ var Pets = (function() {
         }).catch(function(err) {
             console.error('Pets load error:', err);
             // Fallback: หาก query คู่ขนานมีปัญหา ให้ดึงเฉพาะ pets ตารางหลักตรงๆ
-            return Api.query('pets', 'select=pet_id,name,type_breed,age&order=pet_id.asc')
+            return queryActivePetsResilient('select=pet_id,name,type_breed,age')
             .then(function(pets) {
                 _pets = (pets || []).map(function(p) {
                     return {
@@ -94,7 +108,8 @@ var Pets = (function() {
                 + (isOwner ? '<div class="mt-4 flex gap-2">'
                     + '<button onclick="Pets.edit(' + p.pet_id + ')" class="flex-1 btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen mr-1"></i>แก้ไข</button>'
                     + '<button onclick="Pets.manageFamily(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary" title="จัดการครอบครัว"><i class="fa-solid fa-users"></i></button>'
-                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger"><i class="fa-solid fa-trash"></i></button>'
+                    + '<button onclick="Pets.archive(' + p.pet_id + ')" class="btn btn-sm btn-warning" title="เก็บเข้าคลัง"><i class="fa-solid fa-box-archive"></i></button>'
+                    + '<button onclick="Pets.remove(' + p.pet_id + ')" class="btn btn-sm btn-danger" title="ลบถาวร"><i class="fa-solid fa-trash"></i></button>'
                     + '</div>' : '')
                 + '</div></div>';
         }).join('');
@@ -156,8 +171,61 @@ var Pets = (function() {
         });
     }
 
+    // === เก็บเข้าคลัง (Pet Archive) แทนการลบถาวร เมื่อสัตว์เลี้ยงเสียชีวิตหรือย้ายไปอยู่
+    // ในความดูแลของผู้อื่น — ประวัติค่าใช้จ่ายเดิมยังอยู่ครบ แค่ไม่โผล่ในหน้านี้อีกต่อไป
+    // ดูย้อนหลังได้ที่หน้าโปรไฟล์ (Profile.js: คลังสัตว์เลี้ยง) ===
+    function archive(petId) {
+        _archivePetId = petId;
+        var pet = _pets.find(function(p) { return p.pet_id === petId; });
+        document.getElementById('archiveModalPetName').textContent = pet ? pet.name : '';
+        document.getElementById('archiveReason').value = 'เสียชีวิต';
+        document.getElementById('archiveOtherNote').value = '';
+        document.getElementById('archiveOtherNoteWrap').classList.add('hidden');
+        document.getElementById('archiveMsg').classList.add('hidden');
+        document.getElementById('archiveModal').classList.remove('hidden');
+    }
+
+    function closeArchiveModal() {
+        document.getElementById('archiveModal').classList.add('hidden');
+        _archivePetId = null;
+    }
+
+    function onArchiveReasonChange() {
+        var reason = document.getElementById('archiveReason').value;
+        document.getElementById('archiveOtherNoteWrap').classList.toggle('hidden', reason !== '__other__');
+    }
+
+    function confirmArchive() {
+        if (!_archivePetId) return;
+        var msg = document.getElementById('archiveMsg');
+        var reason = document.getElementById('archiveReason').value;
+        var note = reason === '__other__' ? document.getElementById('archiveOtherNote').value.trim() : reason;
+
+        if (!note) {
+            msg.textContent = 'กรุณาระบุรายละเอียด';
+            msg.classList.remove('hidden');
+            return;
+        }
+
+        Api.update('pets', 'pet_id=eq.' + _archivePetId, {
+            is_archived: true,
+            archived_note: note,
+            archived_at: new Date().toISOString()
+        }).then(function() {
+            closeArchiveModal();
+            load();
+        }).catch(function(err) {
+            msg.textContent = 'ไม่สามารถเก็บเข้าคลังได้: ' + (err.message || err);
+            msg.classList.remove('hidden');
+        });
+    }
+
+    // ลบถาวร — ต่างจาก "เก็บเข้าคลัง" ตรงที่ลบแถวออกจากตารางจริง (CASCADE ลบรายจ่าย/
+    // งบประมาณ/แจ้งเตือนที่ผูกกับสัตว์เลี้ยงตัวนี้ไปด้วยตาม schema) กู้คืนไม่ได้อีก
+    // เหมาะกับกรณีลบโปรไฟล์ที่สร้างผิด/ซ้ำ ไม่ใช่กรณีสัตว์เลี้ยงเสียชีวิต/ย้ายไปแล้ว
+    // (แนะนำให้ใช้ "เก็บเข้าคลัง" แทนถ้าต้องการรักษาประวัติค่าใช้จ่ายเดิมไว้)
     function remove(petId) {
-        if (!confirm('ต้องการลบสัตว์เลี้ยงตัวนี้จริงหรือไม่?')) return;
+        if (!confirm('ต้องการลบสัตว์เลี้ยงตัวนี้ถาวรหรือไม่?\n\nการลบถาวรจะลบประวัติค่าใช้จ่าย งบประมาณ และการแจ้งเตือนที่ผูกกับสัตว์เลี้ยงตัวนี้ทั้งหมด และกู้คืนไม่ได้\n\nถ้าสัตว์เลี้ยงเสียชีวิตหรือย้ายไปอยู่ในความดูแลของผู้อื่น แนะนำให้ใช้ "เก็บเข้าคลัง" แทน เพื่อรักษาประวัติไว้')) return;
         Api.remove('pets', 'pet_id=eq.' + petId)
             .then(function() { load(); })
             .catch(function(err) { alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + (err.message || err)); });
@@ -265,6 +333,7 @@ var Pets = (function() {
 
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove,
+        archive: archive, closeArchiveModal: closeArchiveModal, onArchiveReasonChange: onArchiveReasonChange, confirmArchive: confirmArchive,
         manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember,
         removeFamilyMember: removeFamilyMember, cancelInvitation: cancelInvitation
     };

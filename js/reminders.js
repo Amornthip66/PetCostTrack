@@ -7,7 +7,7 @@ var Reminders = (function() {
 
     function init() {
         Promise.all([
-            Api.query('pets', 'select=pet_id,name'),
+            queryActivePetsResilient(),
             Api.query('categories', 'select=category_id,category_name'),
             loadInvitations()
         ]).then(function(r) {
@@ -15,6 +15,17 @@ var Reminders = (function() {
             _categories = r[1] || [];
             populateForm();
             load();
+        });
+    }
+
+    // ดึงสัตว์เลี้ยงที่ยังไม่ถูกเก็บเข้าคลังแบบกันพัง (ไม่ควรตั้งแจ้งเตือนใหม่ให้สัตว์เลี้ยงที่
+    // เสียชีวิต/ย้ายไปแล้ว) เผื่อฐานข้อมูลจริงยังไม่ได้รัน migration
+    // 20260908000000_pet_archive.sql (ที่เพิ่มคอลัมน์ is_archived)
+    function queryActivePetsResilient() {
+        return Api.query('pets', 'select=pet_id,name&is_archived=eq.false')
+        .catch(function(err) {
+            console.warn('pets query with is_archived failed, falling back:', err);
+            return Api.query('pets', 'select=pet_id,name');
         });
     }
 

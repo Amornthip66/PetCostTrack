@@ -15,6 +15,7 @@ var Profile = (function() {
         document.getElementById('editRole').value = user.role;
 
         loadFamily();
+        loadPetArchive();
     }
 
     function loadFamily() {
@@ -124,6 +125,56 @@ var Profile = (function() {
         });
     }
 
+    // === คลังสัตว์เลี้ยง (Pet Archive) — สัตว์เลี้ยงที่เก็บเข้าคลังแทนการลบถาวร ===
+    function loadPetArchive() {
+        var user = Auth.getUser();
+        var list = document.getElementById('petArchiveList');
+        if (!list || !user) return;
+
+        Api.query('pet_access', 'select=pet_id,access_role&user_id=eq.' + user.user_id)
+        .then(function(access) {
+            access = access || [];
+            var accessMap = {};
+            access.forEach(function(a) { accessMap[a.pet_id] = a.access_role; });
+            var petIds = access.map(function(a) { return a.pet_id; });
+            if (!petIds.length) { list.innerHTML = '<p class="text-gray-500">ยังไม่มีสัตว์เลี้ยงในคลัง</p>'; return; }
+
+            return Api.query('pets',
+                'select=pet_id,name,type_breed,age,archived_note,archived_at&pet_id=in.(' + petIds.join(',') + ')'
+                + '&is_archived=eq.true&order=archived_at.desc'
+            ).then(function(pets) {
+                pets = pets || [];
+                if (!pets.length) { list.innerHTML = '<p class="text-gray-500">ยังไม่มีสัตว์เลี้ยงในคลัง</p>'; return; }
+
+                list.innerHTML = pets.map(function(p) {
+                    var isOwner = accessMap[p.pet_id] === 'Owner';
+                    return '<div class="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">'
+                        + '<div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center"><i class="fa-solid fa-paw"></i></div>'
+                        + '<div class="flex-1 min-w-0">'
+                        + '<p class="text-sm font-medium text-gray-900">' + p.name + '</p>'
+                        + '<p class="text-xs text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + (p.age ? ' • ' + p.age + ' ปี' : '') + '</p>'
+                        + '<p class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-box-archive mr-1"></i>' + (p.archived_note || '') + (p.archived_at ? ' • ' + UI.formatDate(p.archived_at) : '') + '</p>'
+                        + '</div>'
+                        + (isOwner ? '<button onclick="Profile.restorePet(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary flex-shrink-0" title="กู้คืน"><i class="fa-solid fa-rotate-left mr-1"></i>กู้คืน</button>' : '')
+                        + '</div>';
+                }).join('');
+            });
+        })
+        .catch(function(err) {
+            // เผื่อฐานข้อมูลจริงยังไม่ได้รัน migration 20260908000000_pet_archive.sql
+            // (คอลัมน์ is_archived ยังไม่มี) — ไม่ให้หน้าโปรไฟล์พังทั้งหน้าเพราะ section นี้พัง
+            console.error('Load pet archive error:', err);
+            list.innerHTML = '<p class="text-red-400 text-sm">ไม่สามารถโหลดคลังสัตว์เลี้ยงได้</p>';
+        });
+    }
+
+    function restorePet(petId) {
+        if (!confirm('ต้องการกู้คืนสัตว์เลี้ยงตัวนี้กลับไปที่หน้า "สัตว์เลี้ยงของฉัน" หรือไม่?')) return;
+        Api.update('pets', 'pet_id=eq.' + petId, { is_archived: false, archived_note: null, archived_at: null })
+        .then(function() { loadPetArchive(); })
+        .catch(function(err) { alert('ไม่สามารถกู้คืนได้: ' + (err.message || err)); });
+    }
+
     function changePassword() {
         var session = Auth.getSession();
         if (!session || !session.access_token) return;
@@ -142,6 +193,7 @@ var Profile = (function() {
 
     return {
         init: init, save: save, changePassword: changePassword,
-        openInviteModal: openInviteModal, closeInviteModal: closeInviteModal, addFamilyMember: addFamilyMember
+        openInviteModal: openInviteModal, closeInviteModal: closeInviteModal, addFamilyMember: addFamilyMember,
+        restorePet: restorePet
     };
 })();

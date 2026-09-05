@@ -113,10 +113,17 @@ var Dashboard = (function() {
         var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
         var list = document.getElementById('expenseList');
 
-        return Api.query('expenses',
-            'select=transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name)'
-            + '&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter
-            + '&order=expense_date.desc&limit=20')
+        // recorded_by_role เป็นคอลัมน์ใหม่ (migration 20260912000000) เก็บสิทธิ์ของ
+        // ผู้บันทึก ณ ตอนสร้างรายการไว้ถาวร ใช้ระบายสีชื่อผู้บันทึก — ถ้าฐานข้อมูลจริง
+        // ยังไม่ได้รัน migration นี้ ให้ถอยไปดึงแบบไม่มีคอลัมน์นี้แทน กันหน้าพังทั้งหน้า
+        var commonFields = 'transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name)';
+        var dateFilter = '&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter + '&order=expense_date.desc&limit=20';
+
+        Api.query('expenses', 'select=transaction_id,amount,expense_date,expense_type,expense_note,recorded_by_role,pets(name),users(name),categories(category_name)' + dateFilter)
+        .catch(function(err) {
+            console.warn('expenses query with recorded_by_role failed, falling back (migration not applied yet?):', err);
+            return Api.query('expenses', 'select=' + commonFields + dateFilter);
+        })
         .then(function(data) {
             if (!data || !data.length) {
                 list.innerHTML = '<li class="py-8 text-center text-gray-400 text-sm">ไม่มีรายการ</li>';
@@ -127,14 +134,14 @@ var Dashboard = (function() {
                 var icon = getIcon(cat);
                 var note = e.expense_note || cat;
                 var hidden = e.expense_type === 'แฝง';
-                var user = e.users && e.users.name || '—';
+                var userName = e.users && e.users.name || '';
                 var pet = e.pets && e.pets.name || '';
                 return '<li class="py-4 hover:bg-gray-50 transition-colors rounded-lg px-2 -mx-2 flex justify-between items-center cursor-pointer">'
                 +'<div class="flex items-center gap-4">'
                 +'<div class="flex-shrink-0 w-12 h-12 '+icon.bg+' '+icon.cl+' rounded-full flex items-center justify-center text-xl"><i class="fa-solid '+icon.i+'"></i></div>'
                 +'<div><p class="text-sm font-semibold text-gray-900 flex items-center gap-2">'+note
                 +(hidden?' <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-pet-hidden">ค่าใช้จ่ายแฝง</span>':' <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">ปกติ</span>')
-                +'</p><p class="text-xs text-gray-500">'+formatDate(e.expense_date)+' • '+user+' • '+pet+'</p></div></div>'
+                +'</p><p class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">'+formatDate(e.expense_date)+' • '+UI.recorderBadge(userName || '—', e.recorded_by_role)+' • '+pet+'</p></div></div>'
                 +'<div class="text-right"><p class="text-sm font-bold text-gray-900">฿ '+fmt(e.amount)+'</p></div></li>';
             }).join('');
         }).catch(function(err) {

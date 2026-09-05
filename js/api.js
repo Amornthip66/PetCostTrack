@@ -119,12 +119,54 @@ var Api = (function() {
         });
     }
 
+    // === Supabase Storage (ไฟล์แนบ เช่น รูปใบเสร็จ) ===
+    // อัปโหลดไฟล์ทับตำแหน่งเดิมได้เสมอ (x-upsert) เพราะแต่ละรายการค่าใช้จ่ายมี
+    // ใบเสร็จได้แค่ใบเดียว แนบใหม่ = เขียนทับไฟล์เดิมที่ path เดิม ไม่ต้องลบเองก่อน
+    // ไม่ตั้ง Content-Type เอง ปล่อยให้ browser ใส่ตาม file.type ให้อัตโนมัติ
+    function uploadFile(bucket, path, file) {
+        return fetch(CONFIG.STORAGE + '/object/' + bucket + '/' + path, {
+            method: 'POST',
+            headers: Object.assign({ 'x-upsert': 'true' }, Auth.headers()),
+            body: file
+        }).then(function(r) {
+            return safeParse(r).then(function(data) {
+                return throwIfHttpError(r, data, 'Upload');
+            });
+        });
+    }
+
+    // ดาวน์โหลดไฟล์จาก bucket ส่วนตัว (ต้องส่ง Authorization ไปด้วยเสมอ เพราะ RLS
+    // บน storage.objects ไม่ใช่ bucket แบบ public) แล้วแปลงเป็น blob URL ให้ <img> ใช้ได้ตรงๆ
+    function downloadFileAsBlobUrl(bucket, path) {
+        return fetch(CONFIG.STORAGE + '/object/' + bucket + '/' + path, {
+            headers: Auth.headers()
+        }).then(function(r) {
+            if (!r.ok) throw new Error('ไม่สามารถโหลดรูปใบเสร็จได้ (' + r.status + ')');
+            return r.blob();
+        }).then(function(blob) {
+            return URL.createObjectURL(blob);
+        });
+    }
+
+    function removeFile(bucket, path) {
+        return fetch(CONFIG.STORAGE + '/object/' + bucket + '/' + path, {
+            method: 'DELETE',
+            headers: Auth.headers()
+        }).then(function(r) {
+            // 404 ถือว่าไม่มีอะไรต้องลบอยู่แล้ว ไม่ต้องรายงาน error
+            if (!r.ok && r.status !== 404) throw new Error('ลบไฟล์ไม่สำเร็จ (' + r.status + ')');
+        });
+    }
+
     return {
         query: query,
         count: count,
         insert: insert,
         update: update,
         remove: remove,
-        rpc: rpc
+        rpc: rpc,
+        uploadFile: uploadFile,
+        downloadFileAsBlobUrl: downloadFileAsBlobUrl,
+        removeFile: removeFile
     };
 })();

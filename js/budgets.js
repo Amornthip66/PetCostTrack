@@ -7,7 +7,7 @@ var Budgets = (function() {
 
     function init() {
         var list = document.getElementById('budgetList');
-        return Api.query('pets', 'select=pet_id,name').then(function(pets) {
+        return queryPetsResilient().then(function(pets) {
             _pets = pets || [];
             populateForm();
             populateFilters();
@@ -18,9 +18,22 @@ var Budgets = (function() {
         });
     }
 
+    // ดึงสัตว์เลี้ยงแบบกันพัง: เผื่อฐานข้อมูลจริงยังไม่ได้รัน migration
+    // 20260908000000_pet_archive.sql (ที่เพิ่มคอลัมน์ is_archived)
+    function queryPetsResilient() {
+        return Api.query('pets', 'select=pet_id,name,is_archived')
+        .catch(function(err) {
+            console.warn('pets query with is_archived failed, falling back:', err);
+            return Api.query('pets', 'select=pet_id,name').then(function(pets) {
+                return (pets || []).map(function(p) { p.is_archived = false; return p; });
+            });
+        });
+    }
+
+    // Form dropdown (ตั้งงบใหม่): ไม่รวมสัตว์เลี้ยงที่เก็บเข้าคลังแล้ว
     function populateForm() {
         var petSel = document.getElementById('formPet');
-        _pets.forEach(function(p) { var o = document.createElement('option'); o.value = p.pet_id; o.textContent = p.name; petSel.appendChild(o); });
+        _pets.filter(function(p) { return !p.is_archived; }).forEach(function(p) { var o = document.createElement('option'); o.value = p.pet_id; o.textContent = p.name; petSel.appendChild(o); });
         var monthSel = document.getElementById('formMonth');
         var months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
         months.forEach(function(m, i) { var o = document.createElement('option'); o.value = i + 1; o.textContent = m; monthSel.appendChild(o); });
@@ -29,12 +42,13 @@ var Budgets = (function() {
         document.getElementById('formYear').value = now.getFullYear();
     }
 
-    // === ตัวกรอง: เลือกสัตว์เลี้ยง / เดือน / ปี ที่ต้องการดูงบประมาณ ===
+    // === ตัวกรอง: เลือกสัตว์เลี้ยง / เดือน / ปี ที่ต้องการดูงบประมาณ (เห็นสัตว์เลี้ยงทุกตัว
+    // รวมที่เก็บเข้าคลังแล้ว เพื่อยังกรองดูงบประมาณเก่าของสัตว์เลี้ยงที่เสียชีวิต/ย้ายไปแล้วได้) ===
     function populateFilters() {
         var petSel = document.getElementById('filterPet');
         if (petSel) {
             petSel.innerHTML = '<option value="">ทุกสัตว์เลี้ยง</option>'
-                + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('');
+                + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + (p.is_archived ? ' (คลัง)' : '') + '</option>'; }).join('');
         }
 
         var monthSel = document.getElementById('filterMonth');

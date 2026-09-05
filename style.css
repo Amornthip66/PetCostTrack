@@ -160,6 +160,17 @@ input[type="submit"]:active {
     border-color: #22c55e;
 }
 
+/* ปุ่มเตือน (เก็บเข้าคลัง) — เบากว่า .btn-danger เพราะยังกู้คืนได้ ไม่ใช่การลบถาวร */
+.btn-warning {
+    background-color: #fffbeb;
+    border-color: #fcd34d;
+    color: #b45309;
+}
+.btn-warning:hover {
+    background-color: #fef3c7;
+    border-color: #f59e0b;
+}
+
 /* ปุ่มบนแถบเมนูสีเข้ม */
 .btn-nav {
     background-color: transparent;

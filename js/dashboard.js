@@ -187,21 +187,32 @@ var Dashboard = (function() {
         });
     }
 
-    // === Pets Dropdown (ทั้งตัวกรองบนหน้า และ dropdown ในฟอร์มเพิ่มรายจ่าย) ===
+    // === Pets Dropdown (ตัวกรองบนหน้า เห็นสัตว์เลี้ยงทุกตัวรวมที่เก็บเข้าคลังแล้ว
+    // เพื่อยังกรองดูประวัติค่าใช้จ่ายเก่าได้ / dropdown ในฟอร์มเพิ่มรายจ่าย ไม่รวมตัวที่
+    // เก็บเข้าคลังแล้ว เพราะไม่ควรบันทึกรายจ่ายใหม่ให้สัตว์เลี้ยงที่ไม่ได้ดูแลแล้ว) ===
     function loadPets() {
-        return Api.query('pets', 'select=pet_id,name').then(function(pets) {
+        return Api.query('pets', 'select=pet_id,name,is_archived')
+        .catch(function(err) {
+            // เผื่อฐานข้อมูลจริงยังไม่ได้รัน migration ที่เพิ่มคอลัมน์ is_archived
+            console.warn('pets query with is_archived failed, falling back:', err);
+            return Api.query('pets', 'select=pet_id,name').then(function(pets) {
+                return (pets || []).map(function(p) { p.is_archived = false; return p; });
+            });
+        })
+        .then(function(pets) {
             _pets = pets || [];
+            var activePets = _pets.filter(function(p) { return !p.is_archived; });
 
             var filterSel = document.getElementById('filterPet');
             if (filterSel) {
                 filterSel.innerHTML = '<option value="">ทุกสัตว์เลี้ยง</option>'
-                    + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('');
+                    + _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + (p.is_archived ? ' (คลัง)' : '') + '</option>'; }).join('');
             }
 
             var formSel = document.getElementById('formPet');
             if (formSel) {
-                formSel.innerHTML = _pets.length
-                    ? _pets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('')
+                formSel.innerHTML = activePets.length
+                    ? activePets.map(function(p) { return '<option value="' + p.pet_id + '">' + p.name + '</option>'; }).join('')
                     : '<option value="">ไม่พบสัตว์เลี้ยง</option>';
             }
         }).catch(function(err) {

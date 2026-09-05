@@ -7,7 +7,7 @@ var History = (function() {
 
     function init() {
         Promise.all([
-            Api.query('pets', 'select=pet_id,name'),
+            queryPetsResilient(),
             queryCategoriesResilient()
         ]).then(function(r) {
             _pets = r[0] || [];
@@ -28,6 +28,18 @@ var History = (function() {
         });
     }
 
+    // ดึงสัตว์เลี้ยงแบบกันพัง: เผื่อฐานข้อมูลจริงยังไม่ได้รัน migration
+    // 20260908000000_pet_archive.sql (ที่เพิ่มคอลัมน์ is_archived)
+    function queryPetsResilient() {
+        return Api.query('pets', 'select=pet_id,name,is_archived')
+        .catch(function(err) {
+            console.warn('pets query with is_archived failed, falling back:', err);
+            return Api.query('pets', 'select=pet_id,name').then(function(pets) {
+                return (pets || []).map(function(p) { p.is_archived = false; return p; });
+            });
+        });
+    }
+
     // ดึงหมวดหมู่แบบกันพัง: ถ้าฐานข้อมูลจริงยังไม่ได้รัน migration
     // 20260906000000_custom_categories.sql (ที่เพิ่มคอลัมน์ category_type) query แรก
     // จะ error เพราะคอลัมน์ยังไม่มี — ให้ลองดึงแบบไม่มีคอลัมน์นี้แทน แล้วถือว่าทุกหมวดหมู่
@@ -44,10 +56,12 @@ var History = (function() {
     }
 
     function populateFilters() {
+        // ตัวกรองบนหน้า: เห็นสัตว์เลี้ยงทุกตัวรวมที่เก็บเข้าคลังแล้ว เพื่อยังกรองดูประวัติ
+        // ค่าใช้จ่ายเก่าของสัตว์เลี้ยงที่เสียชีวิต/ย้ายไปแล้วได้
         var petSel = document.getElementById('filterPet');
         _pets.forEach(function(p) {
             var opt = document.createElement('option');
-            opt.value = p.pet_id; opt.textContent = p.name;
+            opt.value = p.pet_id; opt.textContent = p.name + (p.is_archived ? ' (คลัง)' : '');
             petSel.appendChild(opt);
         });
         var catSel = document.getElementById('filterCategory');
@@ -56,9 +70,9 @@ var History = (function() {
             opt.value = c.category_id; opt.textContent = c.category_name;
             catSel.appendChild(opt);
         });
-        // Form pet dropdown
+        // Form pet dropdown: ไม่รวมสัตว์เลี้ยงที่เก็บเข้าคลังแล้ว (ไม่ควรบันทึกรายจ่ายใหม่ให้)
         var formPet = document.getElementById('formPet');
-        _pets.forEach(function(p) {
+        _pets.filter(function(p) { return !p.is_archived; }).forEach(function(p) {
             var opt = document.createElement('option');
             opt.value = p.pet_id; opt.textContent = p.name;
             formPet.appendChild(opt);

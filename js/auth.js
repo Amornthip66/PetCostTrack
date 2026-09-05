@@ -5,6 +5,7 @@
 var Auth = (function() {
     var _session = null;
     var _user = null;
+    var _refreshTimer = null;
 
     // อ่าน response เป็น JSON อย่างปลอดภัยเสมอ: ห้ามเรียก r.json() ตรงๆ เด็ดขาด
     // เพราะถ้า body ว่างเปล่า (204, RPC ที่คืนค่า VOID ฯลฯ) r.json() จะโยน
@@ -31,6 +32,7 @@ var Auth = (function() {
                     return null;
                 }
             }
+            scheduleTokenRefresh();
         }
         return _session;
     }
@@ -42,12 +44,51 @@ var Auth = (function() {
         }
         _session = data;
         localStorage.setItem('sb_session', JSON.stringify(data));
+        scheduleTokenRefresh();
     }
 
     function clearSession() {
         _session = null;
         _user = null;
         localStorage.removeItem('sb_session');
+        if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+    }
+
+    // Access token ของ Supabase หมดอายุปกติราว 1 ชม. ถ้าไม่มีการ refresh ก่อน
+    // หมดอายุ session จะถูกเคลียร์เงียบๆ ตอนเรียก getSession() ครั้งถัดไป ทำให้
+    // headers() ไม่มี Authorization ส่งไป PostgREST จะมองเป็น role "anon" ทันที
+    // ผลคือ auth.uid() เป็น NULL และชน RLS policy (เช่น pets_insert) แม้ผู้ใช้จะ
+    // ล็อกอินอยู่จริงในหน้าจอ จึงต้อง refresh token ล่วงหน้าก่อนหมดอายุเสมอ
+    function scheduleTokenRefresh() {
+        if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+        var s = _session;
+        if (!s || !s.refresh_token || !s.expires_at) return;
+        var now = Math.floor(Date.now() / 1000);
+        // รีเฟรชล่วงหน้า 5 นาทีก่อนหมดอายุ อย่างน้อย 5 วินาที กันกรณี expires_at ใกล้ปัจจุบันมาก
+        var delayMs = Math.max((s.expires_at - now - 300), 5) * 1000;
+        _refreshTimer = setTimeout(function() { refreshToken(); }, delayMs);
+    }
+
+    function refreshToken() {
+        var s = _session;
+        if (!s || !s.refresh_token) return Promise.resolve(null);
+        return fetch(CONFIG.AUTH + '/token?grant_type=refresh_token', {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: s.refresh_token })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok || !data || !data.access_token) {
+                    console.warn('Token refresh failed, session will expire normally');
+                    return null;
+                }
+                saveSession(data);
+                return data;
+            });
+        }).catch(function(err) {
+            console.warn('Token refresh error:', err);
+            return null;
+        });
     }
 
     function isLoggedIn() {

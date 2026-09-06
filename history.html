@@ -105,6 +105,16 @@
                         </div>
                         <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
                         <div>
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                                <input type="checkbox" id="formShareToggle" onchange="History.onShareToggle()" class="h-4 w-4 rounded border-gray-300 text-pet focus:ring-pet">
+                                แบ่งค่าใช้จ่ายนี้กับสัตว์เลี้ยงตัวอื่นด้วย
+                            </label>
+                            <div id="shareSection" class="hidden mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <p class="text-xs text-gray-500 mb-2">เลือกสัตว์เลี้ยงตัวอื่นที่ร่วมใช้จ่ายรายการนี้ด้วย ระบบจะหารเฉลี่ยจำนวนเงินให้อัตโนมัติ (ข้อมูลเสริมสำหรับดูภายหลังเท่านั้น ไม่กระทบยอดรวมของสัตว์เลี้ยงหลักที่เลือกไว้ด้านบน)</p>
+                                <div id="sharePetCheckboxes" class="space-y-1 max-h-32 overflow-y-auto text-sm"></div>
+                            </div>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700">ใบเสร็จ (ถ้ามี)</label>
                             <div id="currentReceiptsList" class="hidden mt-1 mb-2 space-y-1.5"></div>
                             <input id="formReceipt" type="file" multiple accept="image/jpeg,image/jpg,image/png,application/pdf,.pdf" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
@@ -141,7 +151,7 @@
     <script src="js/api.js?v=20260913"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
-    <script src="js/history.js?v=20260915"></script>
+    <script src="js/history.js?v=20260917"></script>
     <script>
         (function() {
             if (!UI.initPage('history')) return;

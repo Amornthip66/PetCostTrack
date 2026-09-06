@@ -6,7 +6,9 @@ var History = (function() {
     var _pets = [], _categories = [], _expenses = [];
     var _petRoleMap = {}, _myUserId = null;
     var _editWindowDays = 30;
-    var _editingTransactionId = null, _editingReceiptPath = null;
+    // _editingReceipts: array ของใบเสร็จทั้งหมดที่ผูกกับรายจ่ายที่กำลังแก้ไขอยู่
+    // (BR-04 อนุญาตแนบได้มากกว่า 1 ไฟล์/รายการ จึงเก็บเป็น array แทนที่จะเป็น path เดียว)
+    var _editingTransactionId = null, _editingReceipts = [];
     // BR-04: ไฟล์ใบเสร็จรองรับ .jpg/.jpeg/.png/.pdf ขนาดไม่เกิน 50MB
     // (ตรงกับ chk_receipts_filetype และขนาด storage bucket ในฐานข้อมูล)
     var RECEIPT_FILE_REGEX = /\.(jpe?g|png|pdf)$/i;
@@ -287,7 +289,7 @@ var History = (function() {
             var icon = UI.getIcon(cat);
             var hidden = e.expense_type === 'แฝง';
             var recorderName = e.users ? e.users.name : '';
-            var receipt = e.receipts && e.receipts.length ? e.receipts[0] : null;
+            var receiptCount = e.receipts ? e.receipts.length : 0;
             var canEdit = canModify(e);
             return '<tr class="hover:bg-gray-50 transition">'
                 + '<td class="px-4 py-3 text-gray-600 whitespace-nowrap">' + UI.formatDate(e.expense_date) + '</td>'
@@ -298,7 +300,7 @@ var History = (function() {
                 + '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (hidden ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600') + '">' + (hidden ? 'แฝง' : 'ปกติ') + '</span></td>'
                 + '<td class="px-4 py-3 text-right font-bold ' + (hidden ? 'text-red-600' : 'text-gray-900') + '">฿ ' + UI.fmt(e.amount) + '</td>'
                 + '<td class="px-4 py-3 text-center">'
-                    + (receipt ? '<button onclick="History.viewReceipt(\'' + receipt.image_path + '\')" class="text-gray-400 hover:text-pet" title="ดูใบเสร็จ"><i class="fa-solid fa-receipt"></i></button>' : '<span class="text-gray-300">—</span>')
+                    + (receiptCount ? '<button onclick="History.viewReceiptList(' + e.transaction_id + ')" class="text-gray-400 hover:text-pet" title="ดูใบเสร็จ (' + receiptCount + ' ไฟล์)"><i class="fa-solid fa-receipt"></i>' + (receiptCount > 1 ? '<sup class="ml-0.5">' + receiptCount + '</sup>' : '') + '</button>' : '<span class="text-gray-300">—</span>')
                 + '</td>'
                 + '<td class="px-4 py-3 text-right whitespace-nowrap">'
                     + (canEdit
@@ -312,17 +314,37 @@ var History = (function() {
 
     function resetModalFields() {
         _editingTransactionId = null;
-        _editingReceiptPath = null;
+        _editingReceipts = [];
         document.getElementById('formNote').value = '';
         document.getElementById('formAmount').value = '';
         document.getElementById('formPet').value = '';
         document.getElementById('formReceipt').value = '';
         document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
         renderCategoryOptions(document.getElementById('formCategory'));
-        var wrap = document.getElementById('currentReceiptWrap');
-        if (wrap) wrap.classList.add('hidden');
+        renderCurrentReceiptsList();
         var title = document.getElementById('expenseModalTitle');
         if (title) title.textContent = 'บันทึกรายจ่ายใหม่';
+    }
+
+    // แสดงรายการใบเสร็จทั้งหมดที่ผูกกับรายจ่ายที่กำลังแก้ไข (BR-04: อาจมีมากกว่า 1 ไฟล์)
+    // แต่ละแถวดูไฟล์นั้นหรือลบเฉพาะไฟล์นั้นได้แยกจากกัน
+    function renderCurrentReceiptsList() {
+        var wrap = document.getElementById('currentReceiptsList');
+        if (!wrap) return;
+        if (!_editingReceipts.length) {
+            wrap.classList.add('hidden');
+            wrap.innerHTML = '';
+            return;
+        }
+        wrap.classList.remove('hidden');
+        wrap.innerHTML = _editingReceipts.map(function(r, idx) {
+            return '<div class="flex items-center justify-between gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">'
+                + '<button type="button" onclick="History.viewReceipt(\'' + r.image_path + '\')" class="text-pet underline text-left flex-1 truncate">'
+                    + '<i class="fa-solid fa-receipt mr-1"></i>ใบเสร็จที่ ' + (idx + 1)
+                + '</button>'
+                + '<button type="button" onclick="History.removeReceipt(' + r.receipt_id + ')" class="text-red-500 hover:text-red-600 flex-shrink-0" title="ลบใบเสร็จนี้"><i class="fa-solid fa-trash"></i></button>'
+                + '</div>';
+        }).join('');
     }
 
     function openModal() {
@@ -342,8 +364,7 @@ var History = (function() {
         }
 
         _editingTransactionId = transactionId;
-        var receipt = e.receipts && e.receipts.length ? e.receipts[0] : null;
-        _editingReceiptPath = receipt ? receipt.image_path : null;
+        _editingReceipts = e.receipts ? e.receipts.slice() : [];
 
         document.getElementById('formNote').value = e.expense_note || '';
         document.getElementById('formAmount').value = e.amount;
@@ -358,8 +379,7 @@ var History = (function() {
         var catId = e.categories ? e.categories.category_id : '';
         renderCategoryOptions(document.getElementById('formCategory'), catId);
 
-        var wrap = document.getElementById('currentReceiptWrap');
-        if (wrap) wrap.classList.toggle('hidden', !_editingReceiptPath);
+        renderCurrentReceiptsList();
 
         document.getElementById('expenseModalTitle').textContent = 'แก้ไขรายจ่าย';
         document.getElementById('expenseModal').classList.remove('hidden');
@@ -367,18 +387,19 @@ var History = (function() {
 
     // ลบรายจ่าย — receipts row ที่ผูกอยู่ถูกลบตามไปด้วยอัตโนมัติ (ON DELETE CASCADE)
     // ส่วนไฟล์ใน Storage ต้องลบเองต่างหาก (Postgres FK cascade ไม่ครอบคลุมไฟล์ storage)
+    // BR-04 อนุญาตแนบได้หลายไฟล์/รายการ จึงต้องวนลบไฟล์ทุกใบที่ผูกกับรายจ่ายนี้ ไม่ใช่แค่ใบแรก
     function remove(transactionId) {
         var e = _expenses.find(function(x) { return x.transaction_id === transactionId; });
         if (!confirm('ต้องการลบรายการนี้หรือไม่? การลบไม่สามารถกู้คืนได้')) return;
-        var receipt = e && e.receipts && e.receipts.length ? e.receipts[0] : null;
+        var receipts = (e && e.receipts) || [];
 
         Api.remove('expenses', 'transaction_id=eq.' + transactionId)
         .then(function() {
-            if (receipt && receipt.image_path) {
-                return Api.removeFile('receipts', receipt.image_path).catch(function(err) {
+            return Promise.all(receipts.map(function(r) {
+                return Api.removeFile('receipts', r.image_path).catch(function(err) {
                     console.warn('Could not remove receipt file (non-critical):', err);
                 });
-            }
+            }));
         })
         .then(function() { load(); })
         .catch(function(err) {
@@ -387,34 +408,53 @@ var History = (function() {
         });
     }
 
-    function viewCurrentReceipt() {
-        if (_editingReceiptPath) viewReceipt(_editingReceiptPath);
-    }
-
-    // ลบใบเสร็จปัจจุบันของรายจ่ายที่กำลังแก้ไข (ลบทั้งแถวใน DB และไฟล์ใน storage)
-    // ใช้ตอนแนบใบเสร็จผิดใบและอยากลบทิ้งโดยไม่ต้องแนบไฟล์ใหม่มาแทนที่
-    function removeCurrentReceipt() {
-        if (!_editingReceiptPath || !_editingTransactionId) return;
+    // ลบใบเสร็จ "เฉพาะไฟล์เดียว" (ระบุด้วย receipt_id) ของรายจ่ายที่กำลังแก้ไข
+    // (ลบทั้งแถวใน DB และไฟล์ใน storage) — ใบเสร็จอื่นๆ ที่แนบอยู่ในรายการเดียวกัน
+    // ไม่ถูกกระทบ ใช้ตอนแนบใบเสร็จผิดใบและอยากลบทิ้งโดยไม่ต้องลบใบอื่นไปด้วย
+    function removeReceipt(receiptId) {
         if (!confirm('ต้องการลบใบเสร็จนี้หรือไม่? การลบไม่สามารถกู้คืนได้')) return;
-        var path = _editingReceiptPath;
-        var transactionId = _editingTransactionId;
+        var rec = _editingReceipts.find(function(r) { return r.receipt_id === receiptId; });
+        if (!rec) return;
+        var path = rec.image_path;
 
-        Api.remove('receipts', 'transaction_id=eq.' + transactionId)
+        Api.remove('receipts', 'receipt_id=eq.' + receiptId)
         .then(function() {
             return Api.removeFile('receipts', path).catch(function(err) {
                 console.warn('Could not remove receipt file (non-critical):', err);
             });
         })
         .then(function() {
-            _editingReceiptPath = null;
-            var wrap = document.getElementById('currentReceiptWrap');
-            if (wrap) wrap.classList.add('hidden');
+            _editingReceipts = _editingReceipts.filter(function(r) { return r.receipt_id !== receiptId; });
+            renderCurrentReceiptsList();
             load();
         })
         .catch(function(err) {
             console.error('Remove receipt error:', err);
             alert('ไม่สามารถลบใบเสร็จได้: ' + (err.message || err));
         });
+    }
+
+    // เปิด modal ดูใบเสร็จจากตารางประวัติ — รายจ่ายหนึ่งรายการอาจมีใบเสร็จมากกว่า 1 ไฟล์
+    // (BR-04) ถ้ามีไฟล์เดียวเปิดดูตรงๆ เหมือนเดิม ถ้ามีหลายไฟล์แสดงรายการให้เลือกดูทีละใบ
+    function viewReceiptList(transactionId) {
+        var e = _expenses.find(function(x) { return x.transaction_id === transactionId; });
+        var receipts = (e && e.receipts) || [];
+        if (!receipts.length) return;
+        var listWrap = document.getElementById('receiptListWrap');
+        if (receipts.length === 1) {
+            if (listWrap) { listWrap.classList.add('hidden'); listWrap.innerHTML = ''; }
+            viewReceipt(receipts[0].image_path);
+            return;
+        }
+        if (listWrap) {
+            listWrap.classList.remove('hidden');
+            listWrap.innerHTML = receipts.map(function(r, idx) {
+                return '<button type="button" onclick="History.viewReceipt(\'' + r.image_path + '\')" '
+                    + 'class="px-3 py-1 rounded-full text-xs font-medium bg-pet-light text-pet hover:bg-pet hover:text-white transition">'
+                    + 'ใบเสร็จ ' + (idx + 1) + '</button>';
+            }).join('');
+        }
+        viewReceipt(receipts[0].image_path);
     }
 
     function viewReceipt(path) {
@@ -447,10 +487,12 @@ var History = (function() {
         var modal = document.getElementById('receiptModal');
         var img = document.getElementById('receiptImage');
         var pdf = document.getElementById('receiptPdf');
+        var listWrap = document.getElementById('receiptListWrap');
         if (img && img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
         if (pdf && pdf.src && pdf.src.indexOf('blob:') === 0) URL.revokeObjectURL(pdf.src);
         if (img) { img.src = ''; img.classList.add('hidden'); }
         if (pdf) { pdf.src = ''; pdf.classList.add('hidden'); }
+        if (listWrap) { listWrap.classList.add('hidden'); listWrap.innerHTML = ''; }
         if (modal) modal.classList.add('hidden');
     }
 
@@ -460,23 +502,28 @@ var History = (function() {
         var amount = document.getElementById('formAmount').value;
         var date = document.getElementById('formDate').value;
         var petId = document.getElementById('formPet').value;
-        var receiptFile = document.getElementById('formReceipt').files[0] || null;
+        // BR-04 (อัปเดตตามผลสำรวจ 82.6%): แนบใบเสร็จได้มากกว่า 1 ไฟล์/รายการ — ไฟล์ที่เลือก
+        // ในฟอร์มนี้จะถูก "เพิ่มเข้าไปเสริม" จากใบเสร็จเดิมที่แนบไว้แล้ว ไม่ใช่แทนที่ทั้งหมด
+        // (ลบใบเสร็จเดิมทีละไฟล์แยกต่างหากผ่านปุ่มลบในรายการ "ใบเสร็จปัจจุบัน")
+        var receiptFiles = Array.prototype.slice.call(document.getElementById('formReceipt').files || []);
         if (!amount || !date || !petId || !catId || catId === '__new__') { alert('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
         // BR-04: ไฟล์ใบเสร็จต้องเป็น .jpg/.jpeg/.png/.pdf เท่านั้น (ตรงกับ chk_receipts_filetype
-        // ในฐานข้อมูล) และขนาดต้องไม่เกิน 50MB (ตรงกับ storage bucket limit) เช็คฝั่ง client
-        // ก่อนเพื่อแจ้ง error ที่เข้าใจง่ายกว่าปล่อยให้ DB/storage ปฏิเสธ
-        if (receiptFile && !RECEIPT_FILE_REGEX.test(receiptFile.name)) {
-            alert('ไฟล์ใบเสร็จต้องเป็นไฟล์ .jpg, .jpeg, .png หรือ .pdf เท่านั้น');
-            return;
-        }
-        if (receiptFile && receiptFile.size > RECEIPT_MAX_BYTES) {
-            alert('ไฟล์ใบเสร็จต้องมีขนาดไม่เกิน 50MB');
-            return;
+        // ในฐานข้อมูล) และขนาดต้องไม่เกิน 50MB ต่อไฟล์ (ตรงกับ storage bucket limit) เช็คฝั่ง
+        // client ก่อนเพื่อแจ้ง error ที่เข้าใจง่ายกว่าปล่อยให้ DB/storage ปฏิเสธ — เช็คให้ครบ
+        // ทุกไฟล์ก่อนอัปโหลดไฟล์ไหนเลย กันกรณีอัปโหลดสำเร็จไปครึ่งหนึ่งแล้วมาเจอไฟล์ที่ผิด
+        for (var fi = 0; fi < receiptFiles.length; fi++) {
+            if (!RECEIPT_FILE_REGEX.test(receiptFiles[fi].name)) {
+                alert('ไฟล์ใบเสร็จต้องเป็นไฟล์ .jpg, .jpeg, .png หรือ .pdf เท่านั้น');
+                return;
+            }
+            if (receiptFiles[fi].size > RECEIPT_MAX_BYTES) {
+                alert('ไฟล์ใบเสร็จแต่ละไฟล์ต้องมีขนาดไม่เกิน 50MB');
+                return;
+            }
         }
         var cat = _categories.find(function(c) { return String(c.category_id) === String(catId); });
         var hidden = cat ? cat.category_type === 'แฝง' : false;
         var isEdit = !!_editingTransactionId;
-        var previousReceiptPath = _editingReceiptPath;
 
         // โปรไฟล์ผู้ใช้ (Auth.getUser()) อาจยังโหลดไม่เสร็จถ้ากดบันทึกเร็วมาก
         // (เพราะ dropdown สัตว์เลี้ยงพร้อมใช้งานได้ก่อนโปรไฟล์จะโหลดเสร็จ) จึงต้อง
@@ -503,22 +550,20 @@ var History = (function() {
             }
 
             return savePromise.then(function(transactionId) {
-                if (!receiptFile) return;
-                var ext = (receiptFile.name.split('.').pop() || 'jpg').toLowerCase();
-                var path = petId + '/' + transactionId + '.' + ext;
-                return Api.uploadFile('receipts', path, receiptFile).then(function() {
-                    var receiptData = { transaction_id: transactionId, image_path: path, receipt_date: date };
-                    var savedReceiptPromise = previousReceiptPath
-                        ? Api.update('receipts', 'transaction_id=eq.' + transactionId, receiptData)
-                        : Api.insert('receipts', receiptData);
-                    return savedReceiptPromise.then(function() {
-                        // นามสกุลไฟล์เปลี่ยน (เช่น .png -> .jpg) ทำให้ path ใหม่ไม่ใช่อันเดิม
-                        // ลบไฟล์เก่าทิ้งแบบ best-effort กันขยะค้างใน storage
-                        if (previousReceiptPath && previousReceiptPath !== path) {
-                            return Api.removeFile('receipts', previousReceiptPath).catch(function() {});
-                        }
+                if (!receiptFiles.length) return;
+                // อัปโหลดทีละไฟล์ตามลำดับ (ไม่ขนาน) เพื่อให้ path แต่ละไฟล์ไม่ชนกันและ
+                // จัดการ error ได้ตรงไปตรงมา — แต่ละไฟล์ path ไม่ซ้ำกันด้วย timestamp+index
+                // ต่อท้าย (ต่างจากเดิมที่ใช้ petId/transactionId.ext เพราะตอนนี้ 1 รายการ
+                // มีได้หลายไฟล์ ใช้ path เดิมจะเขียนทับกันเอง)
+                return receiptFiles.reduce(function(chain, file, idx) {
+                    return chain.then(function() {
+                        var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+                        var path = petId + '/' + transactionId + '/' + Date.now() + '_' + idx + '.' + ext;
+                        return Api.uploadFile('receipts', path, file).then(function() {
+                            return Api.insert('receipts', { transaction_id: transactionId, image_path: path, receipt_date: date });
+                        });
                     });
-                });
+                }, Promise.resolve());
             });
         }).then(function() {
             closeModal();
@@ -531,8 +576,8 @@ var History = (function() {
 
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, submit: submit,
-        edit: edit, remove: remove, viewReceipt: viewReceipt, viewCurrentReceipt: viewCurrentReceipt,
-        removeCurrentReceipt: removeCurrentReceipt,
+        edit: edit, remove: remove, viewReceipt: viewReceipt, viewReceiptList: viewReceiptList,
+        removeReceipt: removeReceipt,
         closeReceiptModal: closeReceiptModal,
         loadCategories: loadCategories, onCategoryChange: onCategoryChange,
         addCategory: addCategory, cancelAddCategory: cancelAddCategory

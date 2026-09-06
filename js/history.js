@@ -16,6 +16,15 @@ var History = (function() {
     var RECEIPT_FILE_REGEX = /\.(jpe?g|png|pdf)$/i;
     var RECEIPT_MAX_BYTES = 50 * 1024 * 1024;
 
+    // หนี HTML entity ก่อนแทรกข้อความที่ผู้ใช้ควบคุมได้ (เช่น ชื่อสัตว์เลี้ยง) ลงใน
+    // innerHTML/attribute โดยตรง — ผู้ใช้ตั้งชื่อสัตว์เลี้ยงเป็นอะไรก็ได้ ถ้าไม่หนีไว้อาจ
+    // มีเครื่องหมายคำพูด/แท็กหลุดออกจาก attribute หรือแทรก element แปลกปลอมเข้ามาได้
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function init() {
         Promise.all([
             queryPetsResilient(),
@@ -308,7 +317,7 @@ var History = (function() {
                 return n ? n + ' (฿' + UI.fmt(s.share_amount) + ')' : '';
             }).filter(Boolean).join(', ');
             var shareBadge = shares.length
-                ? ' <span class="text-xs text-pet" title="แบ่งกับ ' + shareNames + '"><i class="fa-solid fa-link"></i> +' + shares.length + '</span>'
+                ? ' <span class="text-xs text-pet" title="แบ่งกับ ' + escapeHtml(shareNames) + '"><i class="fa-solid fa-link"></i> +' + shares.length + '</span>'
                 : '';
             var canEdit = canModify(e);
             return '<tr class="hover:bg-gray-50 transition">'
@@ -367,6 +376,19 @@ var History = (function() {
         var candidates = _pets.filter(function(p) {
             return !p.is_archived && String(p.pet_id) !== String(primaryPetId);
         });
+        // ถ้าสัตว์เลี้ยงที่เคยถูกแบ่งไว้ถูกเก็บเข้าคลังไปแล้ว ต้องยังโชว์ตัวเลือกนั้นกลับมา
+        // ชั่วคราว (เหมือน ensurePetOption() ที่ใช้กับ dropdown สัตว์เลี้ยงหลักตอนแก้ไข
+        // รายจ่ายเก่า) ไม่งั้นช่องนี้จะไม่ถูก render เลย ทำให้ saveShares() ลบส่วนแบ่งของ
+        // สัตว์เลี้ยงตัวนั้นทิ้งอย่างถาวรโดยไม่ตั้งใจตอนบันทึกครั้งถัดไป (เพราะ saveShares
+        // ล้างของเดิมทั้งหมดแล้วเขียนใหม่ตามที่ติ๊กไว้ในฟอร์มเท่านั้น)
+        var candidateIds = {};
+        candidates.forEach(function(p) { candidateIds[p.pet_id] = true; });
+        _editingShares.forEach(function(s) {
+            if (candidateIds[s.pet_id] || String(s.pet_id) === String(primaryPetId)) return;
+            var archivedPet = _pets.find(function(p) { return String(p.pet_id) === String(s.pet_id); });
+            candidates.push({ pet_id: s.pet_id, name: (archivedPet ? archivedPet.name : 'สัตว์เลี้ยง') + ' (คลัง)' });
+            candidateIds[s.pet_id] = true;
+        });
         if (!candidates.length) {
             wrap.innerHTML = '<p class="text-xs text-gray-400">ไม่มีสัตว์เลี้ยงตัวอื่นให้เลือก</p>';
             updateShareSummary();
@@ -380,7 +402,7 @@ var History = (function() {
             var disabledAttr = hasExisting ? '' : ' disabled';
             return '<label class="flex items-center gap-2 py-0.5">'
                 + '<input type="checkbox" value="' + p.pet_id + '"' + checked + ' onchange="History.onSharePetToggle(this)" class="h-4 w-4 rounded border-gray-300 text-pet focus:ring-pet flex-shrink-0">'
-                + '<span class="flex-1 truncate">' + p.name + '</span>'
+                + '<span class="flex-1 truncate">' + escapeHtml(p.name) + '</span>'
                 + '<input type="number" step="0.01" min="0" value="' + amountVal + '" oninput="History.updateShareSummary()" placeholder="0.00"'
                     + ' class="w-24 px-2 py-1 border border-gray-300 rounded text-right text-xs' + disabledCls + '"' + disabledAttr + '>'
                 + '</label>';
@@ -815,7 +837,8 @@ var History = (function() {
             }
 
             return savePromise.then(function(transactionId) {
-                var receiptPromise = !receiptFiles.length ? Promise.resolve() : receiptFiles.reduce(function(chain, file, idx) {
+                var receiptUploadFailed = false;
+                var receiptPromise = (!receiptFiles.length ? Promise.resolve() : receiptFiles.reduce(function(chain, file, idx) {
                     // อัปโหลดทีละไฟล์ตามลำดับ (ไม่ขนาน) เพื่อให้ path แต่ละไฟล์ไม่ชนกันและ
                     // จัดการ error ได้ตรงไปตรงมา — แต่ละไฟล์ path ไม่ซ้ำกันด้วย timestamp+index
                     // ต่อท้าย (ต่างจากเดิมที่ใช้ petId/transactionId.ext เพราะตอนนี้ 1 รายการ
@@ -827,7 +850,16 @@ var History = (function() {
                             return Api.insert('receipts', { transaction_id: transactionId, image_path: path, receipt_date: date });
                         });
                     });
-                }, Promise.resolve());
+                }, Promise.resolve()))
+                // รายจ่าย (transactionId นี้) ถูกบันทึกลง DB ไปแล้วก่อนถึงจุดนี้เสมอ (ไม่ว่า
+                // isEdit หรือสร้างใหม่) ถ้าไฟล์แนบไฟล์ใดไฟล์หนึ่งอัปโหลดไม่สำเร็จ (เช่น
+                // เน็ตหลุดกลางทาง) ต้องไม่ปล่อยให้ error หลุดไปโผล่เป็น "บันทึกรายจ่าย
+                // ไม่สำเร็จ" เหมือนไม่มีอะไรถูกบันทึกเลย เพราะถ้าผู้ใช้เข้าใจผิดแล้วกด
+                // "บันทึก" ซ้ำ จะกลายเป็นสร้างรายจ่ายซ้ำอีกรายการ (Api.insert ใหม่อีกรอบ)
+                .catch(function(err) {
+                    console.error('Receipt upload failed (expense already saved, transaction_id=' + transactionId + '):', err);
+                    receiptUploadFailed = true;
+                });
 
                 // ข้อ 3.5: บันทึกข้อมูล "แบ่งค่าใช้จ่าย" เป็นขั้นตอนเสริม — ห่อด้วย .catch()
                 // แยกต่างหาก เพื่อไม่ให้การบันทึกรายจ่ายหลัก/ใบเสร็จ (ซึ่งสำคัญกว่า) ล้มเหลว
@@ -836,11 +868,16 @@ var History = (function() {
                     return saveShares(transactionId).catch(function(err) {
                         console.warn('Save expense_pet_shares failed (non-critical - อาจยังไม่ได้รัน migration 20260913000000):', err);
                     });
+                }).then(function() {
+                    return receiptUploadFailed;
                 });
             });
-        }).then(function() {
+        }).then(function(receiptUploadFailed) {
             closeModal();
             load();
+            if (receiptUploadFailed) {
+                alert('บันทึกรายจ่ายสำเร็จแล้ว แต่แนบไฟล์ใบเสร็จบางไฟล์ไม่สำเร็จ กรุณาเปิดแก้ไขรายการนี้แล้วลองแนบใหม่อีกครั้ง');
+            }
         }).catch(function(err) {
             console.error('Submit expense error:', err);
             alert('บันทึกรายจ่ายไม่สำเร็จ: ' + (err.message || err));

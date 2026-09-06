@@ -119,17 +119,31 @@ var Budgets = (function() {
             return;
         }
 
-        // ดึงค่าใช้จ่ายจริงของแต่ละเดือน
+        // ดึงค่าใช้จ่ายจริงของแต่ละเดือน — ถ้ารายจ่ายนั้นถูก "แบ่ง" ให้สัตว์เลี้ยงตัวอื่นด้วย
+        // (ตาราง expense_pet_shares) ต้องหักส่วนแบ่งนั้นออกก่อนนับเข้ายอดใช้จ่ายของสัตว์เลี้ยง
+        // ตัวนี้ ไม่งั้นยอดใช้จ่ายเทียบงบจะไม่ตรงกับยอดที่แสดงบน Dashboard ของสัตว์เลี้ยงตัวนี้
+        // (ซึ่งหักส่วนแบ่งออกไปแล้วตาม js/dashboard.js: queryExpensesForFilter) ทำให้รายจ่าย
+        // เดียวกันถูกนับเป็นคนละยอดขึ้นอยู่กับว่าเปิดหน้าไหนดู — ถ้า query พร้อม join ล้มเหลว
+        // (เช่น migration 20260913000000 ยังไม่ได้รัน) ให้ถอยไปดึงแบบเดิม (ไม่หักส่วนแบ่ง)
         var queries = _budgets.map(function(b) {
             var mm = String(b.budget_month).padStart(2, '0');
             var mmN = String(b.budget_month + 1 > 12 ? 1 : b.budget_month + 1).padStart(2, '0');
             var yN = b.budget_month + 1 > 12 ? b.budget_year + 1 : b.budget_year;
-            return Api.query('expenses', 'select=amount&pet_id=eq.' + b.pets.pet_id + '&expense_date=gte.' + b.budget_year + '-' + mm + '-01&expense_date=lt.' + yN + '-' + mmN + '-01');
+            var dateFilter = '&expense_date=gte.' + b.budget_year + '-' + mm + '-01&expense_date=lt.' + yN + '-' + mmN + '-01';
+            return Api.query('expenses', 'select=amount,expense_pet_shares(share_amount)&pet_id=eq.' + b.pets.pet_id + dateFilter)
+                .catch(function(err) {
+                    console.warn('expenses query with expense_pet_shares failed, falling back (migration not applied yet?):', err);
+                    return Api.query('expenses', 'select=amount&pet_id=eq.' + b.pets.pet_id + dateFilter);
+                });
         });
 
         Promise.all(queries).then(function(results) {
             list.innerHTML = _budgets.map(function(b, i) {
-                var spent = (results[i] || []).reduce(function(s, e) { return s + Number(e.amount); }, 0);
+                var spent = (results[i] || []).reduce(function(s, e) {
+                    var shares = e.expense_pet_shares || [];
+                    var sumShared = shares.reduce(function(ss, r) { return ss + Number(r.share_amount || 0); }, 0);
+                    return s + (Number(e.amount) - sumShared);
+                }, 0);
                 var limit = Number(b.budget_limit);
                 var percent = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
                 var isOver = spent > limit;

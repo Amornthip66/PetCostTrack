@@ -7,6 +7,10 @@ var History = (function() {
     var _petRoleMap = {}, _myUserId = null;
     var _editWindowDays = 30;
     var _editingTransactionId = null, _editingReceiptPath = null;
+    // BR-04: ไฟล์ใบเสร็จรองรับ .jpg/.jpeg/.png/.pdf ขนาดไม่เกิน 50MB
+    // (ตรงกับ chk_receipts_filetype และขนาด storage bucket ในฐานข้อมูล)
+    var RECEIPT_FILE_REGEX = /\.(jpe?g|png|pdf)$/i;
+    var RECEIPT_MAX_BYTES = 50 * 1024 * 1024;
 
     function init() {
         Promise.all([
@@ -387,29 +391,66 @@ var History = (function() {
         if (_editingReceiptPath) viewReceipt(_editingReceiptPath);
     }
 
+    // ลบใบเสร็จปัจจุบันของรายจ่ายที่กำลังแก้ไข (ลบทั้งแถวใน DB และไฟล์ใน storage)
+    // ใช้ตอนแนบใบเสร็จผิดใบและอยากลบทิ้งโดยไม่ต้องแนบไฟล์ใหม่มาแทนที่
+    function removeCurrentReceipt() {
+        if (!_editingReceiptPath || !_editingTransactionId) return;
+        if (!confirm('ต้องการลบใบเสร็จนี้หรือไม่? การลบไม่สามารถกู้คืนได้')) return;
+        var path = _editingReceiptPath;
+        var transactionId = _editingTransactionId;
+
+        Api.remove('receipts', 'transaction_id=eq.' + transactionId)
+        .then(function() {
+            return Api.removeFile('receipts', path).catch(function(err) {
+                console.warn('Could not remove receipt file (non-critical):', err);
+            });
+        })
+        .then(function() {
+            _editingReceiptPath = null;
+            var wrap = document.getElementById('currentReceiptWrap');
+            if (wrap) wrap.classList.add('hidden');
+            load();
+        })
+        .catch(function(err) {
+            console.error('Remove receipt error:', err);
+            alert('ไม่สามารถลบใบเสร็จได้: ' + (err.message || err));
+        });
+    }
+
     function viewReceipt(path) {
         var modal = document.getElementById('receiptModal');
         var img = document.getElementById('receiptImage');
+        var pdf = document.getElementById('receiptPdf');
         var msg = document.getElementById('receiptModalMsg');
         if (!modal || !img) return;
         img.classList.add('hidden');
+        if (pdf) pdf.classList.add('hidden');
         if (msg) { msg.textContent = 'กำลังโหลด...'; msg.classList.remove('hidden'); }
         modal.classList.remove('hidden');
+        var isPdf = /\.pdf$/i.test(path);
         Api.downloadFileAsBlobUrl('receipts', path).then(function(url) {
-            img.src = url;
-            img.classList.remove('hidden');
+            if (isPdf && pdf) {
+                pdf.src = url;
+                pdf.classList.remove('hidden');
+            } else {
+                img.src = url;
+                img.classList.remove('hidden');
+            }
             if (msg) msg.classList.add('hidden');
         }).catch(function(err) {
             console.error('View receipt error:', err);
-            if (msg) { msg.textContent = 'ไม่สามารถโหลดรูปใบเสร็จได้: ' + (err.message || err); }
+            if (msg) { msg.textContent = 'ไม่สามารถโหลดใบเสร็จได้: ' + (err.message || err); }
         });
     }
 
     function closeReceiptModal() {
         var modal = document.getElementById('receiptModal');
         var img = document.getElementById('receiptImage');
+        var pdf = document.getElementById('receiptPdf');
         if (img && img.src && img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
+        if (pdf && pdf.src && pdf.src.indexOf('blob:') === 0) URL.revokeObjectURL(pdf.src);
         if (img) { img.src = ''; img.classList.add('hidden'); }
+        if (pdf) { pdf.src = ''; pdf.classList.add('hidden'); }
         if (modal) modal.classList.add('hidden');
     }
 
@@ -421,10 +462,15 @@ var History = (function() {
         var petId = document.getElementById('formPet').value;
         var receiptFile = document.getElementById('formReceipt').files[0] || null;
         if (!amount || !date || !petId || !catId || catId === '__new__') { alert('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
-        // BR-04: ไฟล์ใบเสร็จต้องเป็น .jpg/.jpeg/.png เท่านั้น (ตรงกับ chk_receipts_filetype
-        // ในฐานข้อมูล) เช็คฝั่ง client ก่อนเพื่อแจ้ง error ที่เข้าใจง่ายกว่าปล่อยให้ DB ปฏิเสธ
-        if (receiptFile && !/\.(jpe?g|png)$/i.test(receiptFile.name)) {
-            alert('ไฟล์ใบเสร็จต้องเป็นไฟล์ .jpg, .jpeg หรือ .png เท่านั้น');
+        // BR-04: ไฟล์ใบเสร็จต้องเป็น .jpg/.jpeg/.png/.pdf เท่านั้น (ตรงกับ chk_receipts_filetype
+        // ในฐานข้อมูล) และขนาดต้องไม่เกิน 50MB (ตรงกับ storage bucket limit) เช็คฝั่ง client
+        // ก่อนเพื่อแจ้ง error ที่เข้าใจง่ายกว่าปล่อยให้ DB/storage ปฏิเสธ
+        if (receiptFile && !RECEIPT_FILE_REGEX.test(receiptFile.name)) {
+            alert('ไฟล์ใบเสร็จต้องเป็นไฟล์ .jpg, .jpeg, .png หรือ .pdf เท่านั้น');
+            return;
+        }
+        if (receiptFile && receiptFile.size > RECEIPT_MAX_BYTES) {
+            alert('ไฟล์ใบเสร็จต้องมีขนาดไม่เกิน 50MB');
             return;
         }
         var cat = _categories.find(function(c) { return String(c.category_id) === String(catId); });
@@ -486,6 +532,7 @@ var History = (function() {
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, submit: submit,
         edit: edit, remove: remove, viewReceipt: viewReceipt, viewCurrentReceipt: viewCurrentReceipt,
+        removeCurrentReceipt: removeCurrentReceipt,
         closeReceiptModal: closeReceiptModal,
         loadCategories: loadCategories, onCategoryChange: onCategoryChange,
         addCategory: addCategory, cancelAddCategory: cancelAddCategory

@@ -9,6 +9,14 @@ var Dashboard = (function() {
     var _categories = [];
     var _chartInstance = null;
 
+    // หนี HTML entity ก่อนแทรกข้อความที่ผู้ใช้ควบคุมได้ (เช่น ชื่อสัตว์เลี้ยง) ลงใน
+    // innerHTML/attribute โดยตรง — เหมือนกับ escapeHtml() ใน js/history.js ทุกประการ
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     // === Helpers ===
     function fmt(n) { return new Intl.NumberFormat('th-TH').format(n); }
 
@@ -105,11 +113,47 @@ var Dashboard = (function() {
         }
 
         if (!petId) {
-            // "ทุกสัตว์เลี้ยง": query เดิมทุกประการ ไม่แตะเลย (ไม่มี expense_pet_shares
-            // เข้ามาเกี่ยวข้อง กันนับซ้ำ เพราะยอดเต็มถูกนับผ่านสัตว์เลี้ยงหลักไปแล้วในมุมมองนี้)
-            return Api.query('expenses', 'select=' + select + dateFilter).then(function(data) {
-                return finalize(data || []);
-            });
+            // "ทุกสัตว์เลี้ยง": migration 20260914000000 ขยาย RLS "expenses_select" ให้เห็น
+            // รายจ่ายที่ถูกแบ่งมาได้ แม้ไม่มีสิทธิ์เข้าถึงสัตว์เลี้ยงหลักของรายจ่ายนั้นก็ตาม
+            // (เคสจริง: ครอบครัวที่แต่ละคนดูแลคนละตัว) ถ้า query แบบเดิมตรงๆ ไม่กรองอะไรเลย
+            // มุมมองนี้จะได้รายจ่ายของสัตว์เลี้ยง "หลัก" ที่ตัวเองไม่มีสิทธิ์เข้าถึงมาเต็มจำนวน
+            // ปนเข้ามาด้วย (เห็นได้แค่เพราะมีส่วนแบ่งให้สัตว์เลี้ยงของตัวเอง) ทำให้ยอดรวม/กราฟ
+            // พองเกินจริงและเห็นเงินของคนอื่นเต็มจำนวนโดยไม่ตั้งใจ
+            //
+            // จึงต้องเช็คว่า pet_id (สัตว์เลี้ยงหลัก) ของแต่ละแถวเป็นสัตว์เลี้ยงที่ตัวเองมี
+            // สิทธิ์เข้าถึงจริงหรือไม่ (_pets โหลดผ่าน pets_select RLS ซึ่งกรองมาแล้วว่าเห็น
+            // เฉพาะสัตว์เลี้ยงที่ตัวเองมีสิทธิ์) ถ้าใช่ → แสดงยอดเต็มเหมือนเดิมทุกประการ
+            // (เป็นรายจ่ายของตัวเอง) ถ้าไม่ใช่ (เห็นแค่ผ่านส่วนแบ่ง) → แสดงเฉพาะผลรวมส่วนแบ่ง
+            // ของสัตว์เลี้ยงที่ตัวเองมีสิทธิ์เท่านั้น กันเห็น/นับเงินก้อนเต็มของคนอื่น
+            var selectWithIds = select.indexOf('pet_id') >= 0 ? select : 'pet_id,' + select;
+            selectWithIds = selectWithIds.indexOf('transaction_id') >= 0 ? selectWithIds : 'transaction_id,' + selectWithIds;
+            var myPetIds = {};
+            _pets.forEach(function(p) { myPetIds[p.pet_id] = true; });
+
+            return Api.query('expenses', 'select=' + selectWithIds + ',expense_pet_shares(pet_id,share_amount)' + dateFilter)
+                .then(function(rows) {
+                    return finalize((rows || []).map(function(e) {
+                        var isMyPrimary = !!myPetIds[e.pet_id];
+                        var shares = e.expense_pet_shares || [];
+                        var result;
+                        if (isMyPrimary) {
+                            result = Object.assign({}, e);
+                        } else {
+                            var myShareSum = shares
+                                .filter(function(s) { return myPetIds[s.pet_id]; })
+                                .reduce(function(s, r) { return s + Number(r.share_amount || 0); }, 0);
+                            result = Object.assign({}, e, { amount: ExpenseAllocation.round2(myShareSum), _shared: true });
+                        }
+                        delete result.expense_pet_shares;
+                        return result;
+                    }));
+                })
+                .catch(function(err) {
+                    console.warn('expenses query with expense_pet_shares (all-pets view) failed, falling back to plain query (migration not applied yet?):', err);
+                    return Api.query('expenses', 'select=' + select + dateFilter).then(function(data) {
+                        return finalize(data || []);
+                    });
+                });
         }
 
         var selectWithId = select.indexOf('transaction_id') >= 0 ? select : 'transaction_id,' + select;
@@ -539,7 +583,7 @@ var Dashboard = (function() {
         wrap.innerHTML = candidates.map(function(p) {
             return '<label class="flex items-center gap-2 py-0.5">'
                 + '<input type="checkbox" value="' + p.pet_id + '" onchange="Dashboard.onSharePetToggle(this)" class="h-4 w-4 rounded border-gray-300 text-pet focus:ring-pet flex-shrink-0">'
-                + '<span class="flex-1 truncate">' + p.name + '</span>'
+                + '<span class="flex-1 truncate">' + escapeHtml(p.name) + '</span>'
                 + '<input type="number" step="0.01" min="0" value="" oninput="Dashboard.updateShareSummary()" placeholder="0.00"'
                     + ' class="w-24 px-2 py-1 border border-gray-300 rounded text-right text-xs bg-gray-100 text-gray-400" disabled>'
                 + '</label>';

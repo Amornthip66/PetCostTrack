@@ -77,6 +77,67 @@ var Dashboard = (function() {
         return { year: Number(parts[0]), month: Number(parts[1]) };
     }
 
+    // === ข้อ 3.5 (ส่วนขยาย): ดึงรายจ่ายสำหรับตัวกรองปัจจุบัน รวมรายจ่ายที่ "แบ่ง" มาให้
+    // สัตว์เลี้ยงที่กำลังดูอยู่ด้วย (functional requirement ข้อ 4 — Display on
+    // Pet-Specific Dashboards) ===
+    // เมื่อไม่ได้กรองสัตว์เลี้ยง ("ทุกสัตว์เลี้ยง", petId ว่าง): query เดิมทุกประการ ไม่แตะ
+    // เลย เพื่อไม่ให้ยอดรวมทั้งหมดเปลี่ยนแปลง (กันนับซ้ำ — ยอดเต็มของรายจ่ายถูกนับไปแล้ว
+    // ครั้งเดียวผ่านสัตว์เลี้ยงหลักอยู่แล้วในมุมมองนี้)
+    //
+    // เมื่อกรองสัตว์เลี้ยงตัวใดตัวหนึ่งโดยเฉพาะ: ดึง 2 ชุดแล้วรวมกัน
+    //   1. รายจ่ายที่สัตว์เลี้ยงตัวนี้เป็น "สัตว์เลี้ยงหลัก" (pet_id ตรงๆ เหมือนเดิม)
+    //   2. รายจ่ายที่ถูก "แบ่ง" มาให้สัตว์เลี้ยงตัวนี้ (ผ่าน expense_pet_shares) — ใช้
+    //      share_amount (ยอดเฉพาะของสัตว์เลี้ยงตัวนี้) แทน amount เต็มจำนวน
+    // ถ้า query expense_pet_shares ล้มเหลว (เช่น migration 20260913000000/20260914000000
+    // ยังไม่ได้รันในฐานข้อมูลจริง) ให้ถือว่าไม่มีรายจ่ายที่ถูกแบ่งมาเลย ไม่ error ทั้งหน้า
+    function queryExpensesForFilter(select, range, petId, opts) {
+        opts = opts || {};
+        var dateFilter = '&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end;
+
+        // sort/limit ใช้แบบ client-side เสมอ (ทั้งสองสาขา if/else ด้านล่าง) แทนการต่อ
+        // &order/&limit เข้ากับ query ตรงๆ แบบเดิม เพราะตอนกรองสัตว์เลี้ยงตัวใดตัวหนึ่ง
+        // ข้อมูลมาจาก 2 query (รายจ่ายหลัก + ส่วนแบ่ง) ที่ต้องรวมกันก่อนแล้วค่อยเรียง/ตัด
+        // จำนวนทีเดียว จึงทำให้เหมือนกันทั้งสองสาขาเพื่อไม่ให้พฤติกรรมต่างกันโดยไม่ตั้งใจ
+        function finalize(rows) {
+            if (opts.sortDateDesc) rows.sort(function(a, b) { return new Date(b.expense_date) - new Date(a.expense_date); });
+            if (opts.limit) rows = rows.slice(0, opts.limit);
+            return rows;
+        }
+
+        if (!petId) {
+            // "ทุกสัตว์เลี้ยง": query เดิมทุกประการ ไม่แตะเลย (ไม่มี expense_pet_shares
+            // เข้ามาเกี่ยวข้อง กันนับซ้ำ เพราะยอดเต็มถูกนับผ่านสัตว์เลี้ยงหลักไปแล้วในมุมมองนี้)
+            return Api.query('expenses', 'select=' + select + dateFilter).then(function(data) {
+                return finalize(data || []);
+            });
+        }
+
+        var selectWithId = select.indexOf('transaction_id') >= 0 ? select : 'transaction_id,' + select;
+        var primaryPromise = Api.query('expenses', 'select=' + selectWithId + dateFilter + '&pet_id=eq.' + petId);
+
+        var sharedDateFilter = '&expenses.expense_date=gte.' + range.start + '&expenses.expense_date=lt.' + range.end;
+        var sharedPromise = Api.query('expense_pet_shares', 'select=share_amount,expenses!inner(' + selectWithId + ')' + sharedDateFilter + '&pet_id=eq.' + petId)
+            .catch(function(err) {
+                console.warn('Load expense_pet_shares for dashboard failed (non-critical - อาจยังไม่ได้รัน migration 20260913000000/20260914000000):', err);
+                return [];
+            });
+
+        return Promise.all([primaryPromise, sharedPromise]).then(function(results) {
+            var primary = results[0] || [];
+            var sharedRows = results[1] || [];
+            var seenIds = {};
+            primary.forEach(function(e) { if (e.transaction_id != null) seenIds[e.transaction_id] = true; });
+
+            var shared = sharedRows
+                .filter(function(r) { return r.expenses; })
+                .map(function(r) { return Object.assign({}, r.expenses, { amount: r.share_amount, _shared: true }); })
+                // กันไว้อีกชั้น ไม่ให้รายจ่ายเดียวกันถูกนับซ้ำถ้าหลุดมาปรากฏในทั้งสองชุด
+                .filter(function(e) { return e.transaction_id == null || !seenIds[e.transaction_id]; });
+
+            return finalize(primary.concat(shared));
+        });
+    }
+
     // === KPI Cards ===
     function loadKPIs() {
         var f = getFilters();
@@ -86,7 +147,7 @@ var Dashboard = (function() {
 
         return Promise.all([
             Api.query('budgets', 'select=budget_limit&budget_month=eq.' + f.month + '&budget_year=eq.' + f.year + petFilter),
-            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter),
+            queryExpensesForFilter('amount,expense_type', range, f.petId),
             Api.count('pets')
         ]).then(function(r) {
             var budgets = r[0] || [], expenses = r[1] || [], petCount = r[2] || 0;
@@ -110,19 +171,22 @@ var Dashboard = (function() {
     function loadExpenseList() {
         var f = getFilters();
         var range = monthRange(f.year, f.month);
-        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
         var list = document.getElementById('expenseList');
 
         // recorded_by_role เป็นคอลัมน์ใหม่ (migration 20260912000000) เก็บสิทธิ์ของ
         // ผู้บันทึก ณ ตอนสร้างรายการไว้ถาวร ใช้ระบายสีชื่อผู้บันทึก — ถ้าฐานข้อมูลจริง
         // ยังไม่ได้รัน migration นี้ ให้ถอยไปดึงแบบไม่มีคอลัมน์นี้แทน กันหน้าพังทั้งหน้า
         var commonFields = 'transaction_id,amount,expense_date,expense_type,expense_note,pets(name),users(name),categories(category_name)';
-        var dateFilter = '&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter + '&order=expense_date.desc&limit=20';
+        var fullFields = 'transaction_id,amount,expense_date,expense_type,expense_note,recorded_by_role,pets(name),users(name),categories(category_name)';
+        // ต้อง sort/limit เอง (client-side) แทนที่จะส่ง &order/&limit ไปกับ query ตรงๆ เพราะ
+        // ตอนกรองสัตว์เลี้ยงตัวใดตัวหนึ่ง ข้อมูลมาจาก 2 query (รายจ่ายหลัก + ส่วนแบ่ง) ที่ต้อง
+        // รวมกันก่อนแล้วค่อยเรียง/ตัดจำนวนทีเดียว ไม่งั้นได้ผลลัพธ์ผิด (ดู queryExpensesForFilter)
+        var queryOpts = { sortDateDesc: true, limit: 20 };
 
-        Api.query('expenses', 'select=transaction_id,amount,expense_date,expense_type,expense_note,recorded_by_role,pets(name),users(name),categories(category_name)' + dateFilter)
+        queryExpensesForFilter(fullFields, range, f.petId, queryOpts)
         .catch(function(err) {
             console.warn('expenses query with recorded_by_role failed, falling back (migration not applied yet?):', err);
-            return Api.query('expenses', 'select=' + commonFields + dateFilter);
+            return queryExpensesForFilter(commonFields, range, f.petId, queryOpts);
         })
         .then(function(data) {
             if (!data || !data.length) {
@@ -141,6 +205,9 @@ var Dashboard = (function() {
                 +'<div class="flex-shrink-0 w-12 h-12 '+icon.bg+' '+icon.cl+' rounded-full flex items-center justify-center text-xl"><i class="fa-solid '+icon.i+'"></i></div>'
                 +'<div><p class="text-sm font-semibold text-gray-900 flex items-center gap-2">'+note
                 +(hidden?' <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-pet-hidden">ค่าใช้จ่ายแฝง</span>':' <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">ปกติ</span>')
+                // ข้อ 3.5 (ส่วนขยาย): บอกให้ชัดว่ายอดนี้เป็น "ส่วนแบ่ง" ของสัตว์เลี้ยงที่กำลังดูอยู่
+                // ไม่ใช่ยอดเต็มของรายจ่าย กันผู้ใช้เข้าใจผิดว่าเป็นยอดเต็ม
+                +(e._shared?' <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pet-light text-pet"><i class="fa-solid fa-link mr-1"></i>ส่วนแบ่ง</span>':'')
                 +'</p><p class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">'+formatDate(e.expense_date)+' • '+UI.recorderBadge(userName || '—', e.recorded_by_role)+' • '+pet+'</p></div></div>'
                 +'<div class="text-right"><p class="text-sm font-bold text-gray-900">฿ '+fmt(e.amount)+'</p></div></li>';
             }).join('');
@@ -154,10 +221,9 @@ var Dashboard = (function() {
     function loadChart() {
         var f = getFilters();
         var range = monthRange(f.year, f.month);
-        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
         var legend = document.getElementById('chartLegend');
 
-        return Api.query('expenses', 'select=amount,expense_type,categories(category_name)&expense_date=gte.' + range.start + '&expense_date=lt.' + range.end + petFilter)
+        return queryExpensesForFilter('amount,expense_type,categories(category_name)', range, f.petId)
         .then(function(data) {
             // ทำลายกราฟเดิมก่อนเสมอ ไม่งั้นเวลาเปลี่ยนตัวกรองจะเกิดกราฟซ้อนทับกันหลายอัน (รวน)
             if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
@@ -387,13 +453,12 @@ var Dashboard = (function() {
         content.innerHTML = '<div class="col-span-full text-center py-6 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
 
         var f = getFilters();
-        var petFilter = f.petId ? '&pet_id=eq.' + f.petId : '';
         var rangeA = monthRange(f.year, f.month);
         var rangeB = monthRange(compare.year, compare.month);
 
         return Promise.all([
-            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + rangeA.start + '&expense_date=lt.' + rangeA.end + petFilter),
-            Api.query('expenses', 'select=amount,expense_type&expense_date=gte.' + rangeB.start + '&expense_date=lt.' + rangeB.end + petFilter)
+            queryExpensesForFilter('amount,expense_type', rangeA, f.petId),
+            queryExpensesForFilter('amount,expense_type', rangeB, f.petId)
         ]).then(function(r) {
             // เช็คซ้ำว่าตอนนี้ toggle/ช่วงเปรียบเทียบยังเป็นอันเดิมที่ query อยู่ไหม (กันกรณีผู้ใช้
             // เปลี่ยนตัวกรองเร็วมากระหว่างรอ request เก่ายังไม่เสร็จ ไม่ให้ผลลัพธ์เก่ามาทับของใหม่)

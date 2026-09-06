@@ -100,7 +100,7 @@
                         </div>
                         <div><label class="block text-sm font-medium text-gray-700">รายการ</label><input id="formNote" type="text" placeholder="รายละเอียด" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงิน (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" placeholder="0.00" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">จำนวนเงินรวมทั้งหมด (บาท) <span class="text-red-500">*</span></label><input id="formAmount" type="number" step="0.01" min="0" placeholder="0.00" oninput="History.updateShareSummary()" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                             <div><label class="block text-sm font-medium text-gray-700">วันที่ <span class="text-red-500">*</span></label><input id="formDate" type="date" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"></div>
                         </div>
                         <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
@@ -110,8 +110,9 @@
                                 แบ่งค่าใช้จ่ายนี้กับสัตว์เลี้ยงตัวอื่นด้วย
                             </label>
                             <div id="shareSection" class="hidden mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                <p class="text-xs text-gray-500 mb-2">เลือกสัตว์เลี้ยงตัวอื่นที่ร่วมใช้จ่ายรายการนี้ด้วย ระบบจะหารเฉลี่ยจำนวนเงินให้อัตโนมัติ (ข้อมูลเสริมสำหรับดูภายหลังเท่านั้น ไม่กระทบยอดรวมของสัตว์เลี้ยงหลักที่เลือกไว้ด้านบน)</p>
+                                <p class="text-xs text-gray-500 mb-2">เลือกสัตว์เลี้ยงตัวอื่นที่ร่วมใช้จ่ายรายการนี้ด้วย แล้วกรอกจำนวนเงินที่แบ่งให้แต่ละตัว (ระบบเติมค่าหารเฉลี่ยให้เป็นจุดเริ่มต้น แก้ไขเองได้อิสระ) ยอดที่แบ่งรวมกันต้องไม่เกินจำนวนเงินรวมด้านบน</p>
                                 <div id="sharePetCheckboxes" class="space-y-1 max-h-32 overflow-y-auto text-sm"></div>
+                                <div id="shareSummary" class="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600"></div>
                             </div>
                         </div>
                         <div>
@@ -151,7 +152,7 @@
     <script src="js/api.js?v=20260913"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
-    <script src="js/history.js?v=20260917"></script>
+    <script src="js/history.js?v=20260918"></script>
     <script>
         (function() {
             if (!UI.initPage('history')) return;

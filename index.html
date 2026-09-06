@@ -189,6 +189,7 @@
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
     <script src="js/dashboard.js?v=20260912"></script>
+    <script src="js/notifications.js?v=20260916"></script>
     <script>
         // === Auth Callback: จัดการ redirect จาก Supabase ===
         (function() {
@@ -244,6 +245,10 @@
                 if (dateInput) dateInput.value = today.toISOString().split('T')[0];
 
                 return Dashboard.init();
+            }).then(function() {
+                // แจ้งเตือนภายในแอป (ข้อ 3.4) — แยกอิสระจาก Dashboard.init() โดยตั้งใจ
+                // ถ้าโมดูลนี้พังด้วยเหตุผลใดก็ตาม จะไม่กระทบการทำงานของแดชบอร์ดหลักเลย
+                try { Notifications.checkReminders(); } catch (e) { console.warn('Notifications init failed (non-critical):', e); }
             }).catch(function(err) {
                 console.error('Init error in dashboard (profile link):', err);
             });

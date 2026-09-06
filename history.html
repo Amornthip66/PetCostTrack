@@ -106,11 +106,12 @@
                         <div><label class="block text-sm font-medium text-gray-700">สัตว์เลี้ยง <span class="text-red-500">*</span></label><select id="formPet" class="mt-1 w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none"><option value="">กำลังโหลด...</option></select></div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">ใบเสร็จ (ถ้ามี)</label>
-                            <div id="currentReceiptWrap" class="hidden mt-1 mb-2">
+                            <div id="currentReceiptWrap" class="hidden mt-1 mb-2 flex items-center gap-4">
                                 <button type="button" onclick="History.viewCurrentReceipt()" class="text-sm text-pet underline"><i class="fa-solid fa-receipt mr-1"></i>ดูใบเสร็จปัจจุบัน</button>
+                                <button type="button" onclick="History.removeCurrentReceipt()" class="text-sm text-red-500 underline"><i class="fa-solid fa-trash mr-1"></i>ลบใบเสร็จ</button>
                             </div>
-                            <input id="formReceipt" type="file" accept="image/jpeg,image/jpg,image/png" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
-                            <p class="text-xs text-gray-400 mt-1">รองรับไฟล์ .jpg, .jpeg, .png เท่านั้น — เลือกไฟล์ใหม่เพื่อแทนที่ใบเสร็จเดิม</p>
+                            <input id="formReceipt" type="file" accept="image/jpeg,image/jpg,image/png,application/pdf,.pdf" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-pet outline-none">
+                            <p class="text-xs text-gray-400 mt-1">รองรับไฟล์ .jpg, .jpeg, .png, .pdf ขนาดไม่เกิน 50MB — เลือกไฟล์ใหม่เพื่อแทนที่ใบเสร็จเดิม หรือกด "ลบใบเสร็จ" เพื่อลบใบเสร็จปัจจุบัน</p>
                         </div>
                     </div>
                 </div>
@@ -133,6 +134,7 @@
                 </div>
                 <p id="receiptModalMsg" class="text-sm text-gray-400 text-center py-8 hidden">กำลังโหลด...</p>
                 <img id="receiptImage" src="" class="w-full rounded-lg hidden" alt="ใบเสร็จ">
+                <iframe id="receiptPdf" src="" class="w-full rounded-lg hidden border border-gray-200" style="height:70vh;" title="ใบเสร็จ (PDF)"></iframe>
             </div>
         </div>
     </div>
@@ -141,7 +143,7 @@
     <script src="js/api.js?v=20260913"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
-    <script src="js/history.js?v=20260913"></script>
+    <script src="js/history.js?v=20260914"></script>
     <script>
         (function() {
             if (!UI.initPage('history')) return;

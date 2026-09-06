@@ -9,6 +9,8 @@ var History = (function() {
     // _editingReceipts: array ของใบเสร็จทั้งหมดที่ผูกกับรายจ่ายที่กำลังแก้ไขอยู่
     // (BR-04 อนุญาตแนบได้มากกว่า 1 ไฟล์/รายการ จึงเก็บเป็น array แทนที่จะเป็น path เดียว)
     var _editingTransactionId = null, _editingReceipts = [];
+    // ข้อ 3.5: ใบเสร็จ/สัตว์เลี้ยงที่ถูก "แบ่ง" ร่วมกับรายจ่ายที่กำลังแก้ไขอยู่ (ข้อมูลเสริม)
+    var _editingShares = [];
     // BR-04: ไฟล์ใบเสร็จรองรับ .jpg/.jpeg/.png/.pdf ขนาดไม่เกิน 50MB
     // (ตรงกับ chk_receipts_filetype และขนาด storage bucket ในฐานข้อมูล)
     var RECEIPT_FILE_REGEX = /\.(jpe?g|png|pdf)$/i;
@@ -252,6 +254,10 @@ var History = (function() {
         // ป้ายผู้บันทึก และเช็คช่วงเวลาแก้ไข/ลบตามลำดับ — ถ้าฐานข้อมูลจริงยังไม่ได้รัน
         // migration ให้ถอยไปดึงแบบไม่มีสองคอลัมน์นี้แทน กันหน้าพังทั้งหน้า
         var fieldsFull = commonFields + ',recorded_by_role,created_at';
+        // ข้อ 3.5: expense_pet_shares (20260913000000) เป็นตารางเสริมใหม่ — ถ้าฐานข้อมูล
+        // จริงยังไม่ได้รัน migration นี้ ให้ถอยไปดึงแบบไม่มี join นี้แทน (ชั้น fallback
+        // แยกต่างหากจากคอลัมน์ recorded_by_role/created_at ด้านบน กันพังซ้อนกัน)
+        var fieldsWithShares = fieldsFull + ',expense_pet_shares(share_id,pet_id,share_amount,pets(name))';
         var filterParams = '&order=expense_date.desc&limit=100';
 
         if (type) filterParams += '&expense_type=eq.' + encodeURIComponent(type);
@@ -261,10 +267,14 @@ var History = (function() {
         var tbody = document.getElementById('historyTable');
         if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
 
-        Api.query('expenses', 'select=' + fieldsFull + filterParams)
+        Api.query('expenses', 'select=' + fieldsWithShares + filterParams)
         .catch(function(err) {
-            console.warn('expenses query with recorded_by_role/created_at failed, falling back (migration not applied yet?):', err);
-            return Api.query('expenses', 'select=' + commonFields + filterParams);
+            console.warn('expenses query with expense_pet_shares failed, falling back (migration not applied yet?):', err);
+            return Api.query('expenses', 'select=' + fieldsFull + filterParams)
+            .catch(function(err2) {
+                console.warn('expenses query with recorded_by_role/created_at failed, falling back (migration not applied yet?):', err2);
+                return Api.query('expenses', 'select=' + commonFields + filterParams);
+            });
         })
         .then(function(data) {
             _expenses = data || [];
@@ -290,11 +300,21 @@ var History = (function() {
             var hidden = e.expense_type === 'แฝง';
             var recorderName = e.users ? e.users.name : '';
             var receiptCount = e.receipts ? e.receipts.length : 0;
+            // ข้อ 3.5: ข้อมูลเสริมแสดงว่ารายจ่ายนี้ถูก "แบ่ง" ให้สัตว์เลี้ยงตัวอื่นด้วย
+            // (นอกเหนือจากสัตว์เลี้ยงหลักในคอลัมน์นี้) แค่แสดงผล ไม่กระทบยอดรวมใดๆ
+            var shares = e.expense_pet_shares || [];
+            var shareNames = shares.map(function(s) {
+                var n = s.pets ? s.pets.name : '';
+                return n ? n + ' (฿' + UI.fmt(s.share_amount) + ')' : '';
+            }).filter(Boolean).join(', ');
+            var shareBadge = shares.length
+                ? ' <span class="text-xs text-pet" title="แบ่งกับ ' + shareNames + '"><i class="fa-solid fa-link"></i> +' + shares.length + '</span>'
+                : '';
             var canEdit = canModify(e);
             return '<tr class="hover:bg-gray-50 transition">'
                 + '<td class="px-4 py-3 text-gray-600 whitespace-nowrap">' + UI.formatDate(e.expense_date) + '</td>'
                 + '<td class="px-4 py-3"><span class="font-medium">' + (e.expense_note || cat) + '</span></td>'
-                + '<td class="px-4 py-3 text-gray-600">' + (e.pets ? e.pets.name : '—') + '</td>'
+                + '<td class="px-4 py-3 text-gray-600">' + (e.pets ? e.pets.name : '—') + shareBadge + '</td>'
                 + '<td class="px-4 py-3">' + UI.recorderBadge(recorderName, e.recorded_by_role) + '</td>'
                 + '<td class="px-4 py-3"><span class="inline-flex items-center gap-1"><i class="fa-solid ' + icon.i + ' text-xs ' + icon.cl + '"></i> ' + cat + '</span></td>'
                 + '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (hidden ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600') + '">' + (hidden ? 'แฝง' : 'ปกติ') + '</span></td>'
@@ -315,6 +335,7 @@ var History = (function() {
     function resetModalFields() {
         _editingTransactionId = null;
         _editingReceipts = [];
+        _editingShares = [];
         document.getElementById('formNote').value = '';
         document.getElementById('formAmount').value = '';
         document.getElementById('formPet').value = '';
@@ -322,8 +343,118 @@ var History = (function() {
         document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
         renderCategoryOptions(document.getElementById('formCategory'));
         renderCurrentReceiptsList();
+        var shareToggle = document.getElementById('formShareToggle');
+        if (shareToggle) shareToggle.checked = false;
+        var shareSection = document.getElementById('shareSection');
+        if (shareSection) shareSection.classList.add('hidden');
         var title = document.getElementById('expenseModalTitle');
         if (title) title.textContent = 'บันทึกรายจ่ายใหม่';
+    }
+
+    // ข้อ 3.5: แสดง checkbox รายชื่อสัตว์เลี้ยงตัวอื่น (ไม่รวมสัตว์เลี้ยงหลักที่เลือกไว้ใน
+    // formPet และไม่รวมสัตว์เลี้ยงที่เก็บเข้าคลังแล้ว) พร้อมช่องกรอกจำนวนเงินที่แบ่งให้
+    // แต่ละตัวโดยตรง (ผู้ใช้กำหนดเองได้ ไม่ใช่แค่หารเฉลี่ยอัตโนมัติเหมือนเวอร์ชันก่อนหน้า)
+    // — ติ๊ก+เติมจำนวนเงินไว้แล้วถ้ามีข้อมูลแบ่งเดิมอยู่ (ตอนแก้ไขรายจ่ายที่เคยแบ่งไว้)
+    function renderSharePetCheckboxes() {
+        var wrap = document.getElementById('sharePetCheckboxes');
+        if (!wrap) return;
+        var primaryPetId = document.getElementById('formPet').value;
+        var existingAmounts = {};
+        _editingShares.forEach(function(s) { existingAmounts[s.pet_id] = s.share_amount; });
+        var candidates = _pets.filter(function(p) {
+            return !p.is_archived && String(p.pet_id) !== String(primaryPetId);
+        });
+        if (!candidates.length) {
+            wrap.innerHTML = '<p class="text-xs text-gray-400">ไม่มีสัตว์เลี้ยงตัวอื่นให้เลือก</p>';
+            updateShareSummary();
+            return;
+        }
+        wrap.innerHTML = candidates.map(function(p) {
+            var hasExisting = existingAmounts[p.pet_id] != null;
+            var checked = hasExisting ? ' checked' : '';
+            var amountVal = hasExisting ? existingAmounts[p.pet_id] : '';
+            var disabledCls = hasExisting ? '' : ' bg-gray-100 text-gray-400';
+            var disabledAttr = hasExisting ? '' : ' disabled';
+            return '<label class="flex items-center gap-2 py-0.5">'
+                + '<input type="checkbox" value="' + p.pet_id + '"' + checked + ' onchange="History.onSharePetToggle(this)" class="h-4 w-4 rounded border-gray-300 text-pet focus:ring-pet flex-shrink-0">'
+                + '<span class="flex-1 truncate">' + p.name + '</span>'
+                + '<input type="number" step="0.01" min="0" value="' + amountVal + '" oninput="History.updateShareSummary()" placeholder="0.00"'
+                    + ' class="w-24 px-2 py-1 border border-gray-300 rounded text-right text-xs' + disabledCls + '"' + disabledAttr + '>'
+                + '</label>';
+        }).join('');
+        updateShareSummary();
+    }
+
+    // เมื่อติ๊ก/เอาติ๊กสัตว์เลี้ยงตัวหนึ่งออก: เปิด/ปิดช่องกรอกจำนวนเงินของแถวนั้น พร้อมเติม
+    // ค่าเริ่มต้นแบบหารเฉลี่ยไว้เป็นจุดตั้งต้น (ผู้ใช้แก้ไขเองภายหลังได้อิสระตามข้อกำหนดข้อ 2)
+    function onSharePetToggle(checkbox) {
+        var row = checkbox.closest('label');
+        var amountInput = row ? row.querySelector('input[type=number]') : null;
+        if (!amountInput) return;
+        if (checkbox.checked) {
+            amountInput.disabled = false;
+            amountInput.classList.remove('bg-gray-100', 'text-gray-400');
+            if (!amountInput.value) {
+                var totalAmount = Number(document.getElementById('formAmount').value) || 0;
+                var checkedCount = document.querySelectorAll('#sharePetCheckboxes input[type=checkbox]:checked').length;
+                amountInput.value = checkedCount > 0 ? (Math.round((totalAmount / (checkedCount + 1)) * 100) / 100) : '';
+            }
+        } else {
+            amountInput.disabled = true;
+            amountInput.value = '';
+            amountInput.classList.add('bg-gray-100', 'text-gray-400');
+        }
+        updateShareSummary();
+    }
+
+    // แสดงความสัมพันธ์ระหว่าง "จำนวนเงินรวมทั้งหมด" กับผลรวมที่แบ่งให้สัตว์เลี้ยงตัวอื่น
+    // ไปแล้ว (functional requirement ข้อ 2: ต้องเห็นความสัมพันธ์นี้ชัดเจน)
+    function updateShareSummary() {
+        var summary = document.getElementById('shareSummary');
+        if (!summary) return;
+        var totalAmount = Number(document.getElementById('formAmount').value) || 0;
+        var checkedBoxes = Array.prototype.slice.call(document.querySelectorAll('#sharePetCheckboxes input[type=checkbox]:checked'));
+        var sumShares = 0;
+        checkedBoxes.forEach(function(cb) {
+            var row = cb.closest('label');
+            var amountInput = row ? row.querySelector('input[type=number]') : null;
+            sumShares += amountInput ? (Number(amountInput.value) || 0) : 0;
+        });
+        var remaining = Math.round((totalAmount - sumShares) * 100) / 100;
+        var over = remaining < -0.001;
+        summary.innerHTML = 'จำนวนเงินรวม ฿' + totalAmount.toFixed(2) + ' — แบ่งให้สัตว์เลี้ยงตัวอื่นแล้ว ฿' + sumShares.toFixed(2)
+            + ' — <span class="' + (over ? 'text-red-600 font-medium' : 'text-gray-600') + '">'
+            + (over ? 'เกินจำนวนเงินรวม ฿' + Math.abs(remaining).toFixed(2) : 'คงเหลือสำหรับสัตว์เลี้ยงหลัก ฿' + remaining.toFixed(2))
+            + '</span>';
+    }
+
+    function onShareToggle() {
+        var toggle = document.getElementById('formShareToggle');
+        var section = document.getElementById('shareSection');
+        if (!toggle || !section) return;
+        if (toggle.checked) {
+            renderSharePetCheckboxes();
+            section.classList.remove('hidden');
+        } else {
+            section.classList.add('hidden');
+        }
+    }
+
+    // อ่านรายการสัตว์เลี้ยง+จำนวนเงินที่ผู้ใช้เลือกแบ่งไว้จากฟอร์ม (ยังไม่ผ่าน validation)
+    function collectShareSelections() {
+        var toggle = document.getElementById('formShareToggle');
+        if (!toggle || !toggle.checked) return [];
+        var primaryPetId = document.getElementById('formPet').value;
+        var checkedBoxes = Array.prototype.slice.call(document.querySelectorAll('#sharePetCheckboxes input[type=checkbox]:checked'));
+        return checkedBoxes.map(function(cb) {
+            var row = cb.closest('label');
+            var amountInput = row ? row.querySelector('input[type=number]') : null;
+            return {
+                pet_id: Number(cb.value),
+                amount: amountInput && amountInput.value !== '' ? Number(amountInput.value) : NaN
+            };
+        // กันไว้อีกชั้น ไม่ให้สัตว์เลี้ยงหลักถูกเพิ่มเป็น "ตัวที่ถูกแบ่ง" ซ้ำอีกที
+        }).filter(function(s) { return String(s.pet_id) !== String(primaryPetId); });
     }
 
     // แสดงรายการใบเสร็จทั้งหมดที่ผูกกับรายจ่ายที่กำลังแก้ไข (BR-04: อาจมีมากกว่า 1 ไฟล์)
@@ -365,6 +496,7 @@ var History = (function() {
 
         _editingTransactionId = transactionId;
         _editingReceipts = e.receipts ? e.receipts.slice() : [];
+        _editingShares = e.expense_pet_shares ? e.expense_pet_shares.slice() : [];
 
         document.getElementById('formNote').value = e.expense_note || '';
         document.getElementById('formAmount').value = e.amount;
@@ -380,6 +512,12 @@ var History = (function() {
         renderCategoryOptions(document.getElementById('formCategory'), catId);
 
         renderCurrentReceiptsList();
+
+        var shareToggle = document.getElementById('formShareToggle');
+        var shareSection = document.getElementById('shareSection');
+        if (shareToggle) shareToggle.checked = _editingShares.length > 0;
+        if (shareSection) shareSection.classList.toggle('hidden', _editingShares.length === 0);
+        renderSharePetCheckboxes();
 
         document.getElementById('expenseModalTitle').textContent = 'แก้ไขรายจ่าย';
         document.getElementById('expenseModal').classList.remove('hidden');
@@ -496,6 +634,36 @@ var History = (function() {
         if (modal) modal.classList.add('hidden');
     }
 
+    // ข้อ 3.5: บันทึก "การแบ่งค่าใช้จ่าย" ให้สัตว์เลี้ยงตัวอื่นนอกเหนือจากสัตว์เลี้ยงหลัก
+    // ไม่กระทบ expenses.amount/pet_id เดิมเลย (สัตว์เลี้ยงหลักยังคงมี pet_id เดี่ยวเหมือน
+    // เดิมทุกประการ) แต่ยอดที่แสดงบน Dashboard ของสัตว์เลี้ยงที่ถูกแบ่งให้ (เมื่อกรองดู
+    // เฉพาะตัวนั้น) จะรวมส่วนแบ่งนี้ด้วย ตาม js/dashboard.js: queryExpensesForFilter()
+    // จำนวนเงินแต่ละแถวมาจากที่ผู้ใช้กรอกเองในฟอร์ม (ไม่ใช่หารเฉลี่ยอัตโนมัติเหมือนเดิม
+    // อีกต่อไป) ผ่านการ validate ในขั้นตอน submit() มาแล้วก่อนถึงจุดนี้
+    // กลยุทธ์: ล้างของเดิมทั้งหมดแล้วเขียนใหม่ทุกครั้งที่บันทึก (ง่ายกว่าการ diff ทีละแถว
+    // และปลอดภัยเพราะเป็นข้อมูลเสริมที่ไม่มีไฟล์แนบผูกอยู่ต่างจากใบเสร็จ)
+    function saveShares(transactionId) {
+        var shareSelections = collectShareSelections();
+
+        // ลบของเดิมก่อนเฉพาะกรณีที่เคยมีอยู่จริง (Api.remove() ของโปรเจกต์นี้ throw error
+        // ถ้าลบแล้วไม่มีแถวไหนถูกลบเลย ซึ่งเป็นพฤติกรรมปกติของฟังก์ชันกลางที่ใช้ทั่วทั้งแอป
+        // จึงต้องเลี่ยงเรียกตอนไม่มีอะไรให้ลบ แทนที่จะไปแก้ Api.remove() ซึ่งกระทบฟีเจอร์อื่น)
+        var clearPromise = _editingShares.length
+            ? Api.remove('expense_pet_shares', 'transaction_id=eq.' + transactionId).catch(function(err) {
+                console.warn('Could not clear old expense_pet_shares (non-critical):', err);
+            })
+            : Promise.resolve();
+
+        return clearPromise.then(function() {
+            if (!shareSelections.length) return;
+            return Promise.all(shareSelections.map(function(s) {
+                return Api.insert('expense_pet_shares', {
+                    transaction_id: transactionId, pet_id: s.pet_id, share_amount: s.amount
+                });
+            }));
+        });
+    }
+
     function submit() {
         var catId = document.getElementById('formCategory').value;
         var note = document.getElementById('formNote').value;
@@ -520,6 +688,27 @@ var History = (function() {
                 alert('ไฟล์ใบเสร็จแต่ละไฟล์ต้องมีขนาดไม่เกิน 50MB');
                 return;
             }
+        }
+        // ข้อ 3.5 (requirement ข้อ 5 — Data Consistency and Validation): ตรวจสอบส่วนแบ่ง
+        // ค่าใช้จ่ายให้ครบก่อนเริ่มบันทึกอะไรเลย เช่นเดียวกับการเช็คไฟล์ใบเสร็จด้านบน
+        var shareSelections = collectShareSelections();
+        var sharePetIdsSeen = {};
+        for (var si = 0; si < shareSelections.length; si++) {
+            var s = shareSelections[si];
+            if (isNaN(s.amount) || s.amount < 0) {
+                alert('กรุณากรอกจำนวนเงินที่แบ่งให้สัตว์เลี้ยงแต่ละตัวให้ถูกต้อง (ต้องเป็นตัวเลขไม่ติดลบ)');
+                return;
+            }
+            if (sharePetIdsSeen[s.pet_id]) {
+                alert('เลือกสัตว์เลี้ยงตัวเดียวกันซ้ำในการแบ่งค่าใช้จ่าย กรุณาตรวจสอบอีกครั้ง');
+                return;
+            }
+            sharePetIdsSeen[s.pet_id] = true;
+        }
+        var sumShares = shareSelections.reduce(function(s, x) { return s + x.amount; }, 0);
+        if (sumShares > Number(amount) + 0.001) { // เผื่อความคลาดเคลื่อนเล็กน้อยจาก floating point
+            alert('ยอดรวมที่แบ่งให้สัตว์เลี้ยงตัวอื่น (฿' + sumShares.toFixed(2) + ') ต้องไม่เกินจำนวนเงินรวมทั้งหมด (฿' + Number(amount).toFixed(2) + ')');
+            return;
         }
         var cat = _categories.find(function(c) { return String(c.category_id) === String(catId); });
         var hidden = cat ? cat.category_type === 'แฝง' : false;
@@ -550,12 +739,11 @@ var History = (function() {
             }
 
             return savePromise.then(function(transactionId) {
-                if (!receiptFiles.length) return;
-                // อัปโหลดทีละไฟล์ตามลำดับ (ไม่ขนาน) เพื่อให้ path แต่ละไฟล์ไม่ชนกันและ
-                // จัดการ error ได้ตรงไปตรงมา — แต่ละไฟล์ path ไม่ซ้ำกันด้วย timestamp+index
-                // ต่อท้าย (ต่างจากเดิมที่ใช้ petId/transactionId.ext เพราะตอนนี้ 1 รายการ
-                // มีได้หลายไฟล์ ใช้ path เดิมจะเขียนทับกันเอง)
-                return receiptFiles.reduce(function(chain, file, idx) {
+                var receiptPromise = !receiptFiles.length ? Promise.resolve() : receiptFiles.reduce(function(chain, file, idx) {
+                    // อัปโหลดทีละไฟล์ตามลำดับ (ไม่ขนาน) เพื่อให้ path แต่ละไฟล์ไม่ชนกันและ
+                    // จัดการ error ได้ตรงไปตรงมา — แต่ละไฟล์ path ไม่ซ้ำกันด้วย timestamp+index
+                    // ต่อท้าย (ต่างจากเดิมที่ใช้ petId/transactionId.ext เพราะตอนนี้ 1 รายการ
+                    // มีได้หลายไฟล์ ใช้ path เดิมจะเขียนทับกันเอง)
                     return chain.then(function() {
                         var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
                         var path = petId + '/' + transactionId + '/' + Date.now() + '_' + idx + '.' + ext;
@@ -564,6 +752,15 @@ var History = (function() {
                         });
                     });
                 }, Promise.resolve());
+
+                // ข้อ 3.5: บันทึกข้อมูล "แบ่งค่าใช้จ่าย" เป็นขั้นตอนเสริม — ห่อด้วย .catch()
+                // แยกต่างหาก เพื่อไม่ให้การบันทึกรายจ่ายหลัก/ใบเสร็จ (ซึ่งสำคัญกว่า) ล้มเหลว
+                // ไปด้วย ถ้าตาราง expense_pet_shares ยังไม่มี (migration ยังไม่ได้รัน)
+                return receiptPromise.then(function() {
+                    return saveShares(transactionId).catch(function(err) {
+                        console.warn('Save expense_pet_shares failed (non-critical - อาจยังไม่ได้รัน migration 20260913000000):', err);
+                    });
+                });
             });
         }).then(function() {
             closeModal();
@@ -580,6 +777,7 @@ var History = (function() {
         removeReceipt: removeReceipt,
         closeReceiptModal: closeReceiptModal,
         loadCategories: loadCategories, onCategoryChange: onCategoryChange,
-        addCategory: addCategory, cancelAddCategory: cancelAddCategory
+        addCategory: addCategory, cancelAddCategory: cancelAddCategory,
+        onShareToggle: onShareToggle, onSharePetToggle: onSharePetToggle, updateShareSummary: updateShareSummary
     };
 })();

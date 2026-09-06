@@ -347,8 +347,11 @@ var History = (function() {
         if (shareToggle) shareToggle.checked = false;
         var shareSection = document.getElementById('shareSection');
         if (shareSection) shareSection.classList.add('hidden');
+        var primaryShareInput = document.getElementById('formPrimaryShareAmount');
+        if (primaryShareInput) primaryShareInput.value = '';
         var title = document.getElementById('expenseModalTitle');
         if (title) title.textContent = 'บันทึกรายจ่ายใหม่';
+        updateShareSummary(); // เคลียร์ข้อความสรุป + คืนสถานะปุ่มบันทึกให้กดได้ตามปกติ
     }
 
     // ข้อ 3.5: แสดง checkbox รายชื่อสัตว์เลี้ยงตัวอื่น (ไม่รวมสัตว์เลี้ยงหลักที่เลือกไว้ใน
@@ -407,37 +410,88 @@ var History = (function() {
         updateShareSummary();
     }
 
-    // แสดงความสัมพันธ์ระหว่าง "จำนวนเงินรวมทั้งหมด" กับผลรวมที่แบ่งให้สัตว์เลี้ยงตัวอื่น
-    // ไปแล้ว (functional requirement ข้อ 2: ต้องเห็นความสัมพันธ์นี้ชัดเจน)
+    // อ่านจำนวนเงินของสัตว์เลี้ยงที่ถูกแบ่งทุกตัวที่ติ๊กไว้ในฟอร์มตอนนี้ (ดิบๆ ยังไม่ validate)
+    // ใช้ร่วมกันทั้งใน updateShareSummary() (live) และ submit() (ตอนบันทึกจริง)
+    function readSharedAmountInputs() {
+        return Array.prototype.slice.call(document.querySelectorAll('#sharePetCheckboxes input[type=checkbox]:checked'))
+            .map(function(cb) {
+                var row = cb.closest('label');
+                var amountInput = row ? row.querySelector('input[type=number]') : null;
+                return amountInput ? amountInput.value : '';
+            });
+    }
+
+    // แสดงความสัมพันธ์ระหว่าง Total Net Amount, Primary Pet Amount และ Shared Pet Amount(s)
+    // แบบ real-time (functional requirement ข้อ 1-2) กฎ: Total = Primary + Sum(Shared) เสมอ
+    // ใช้ ExpenseAllocation (โมดูลกลางที่ history.js และ dashboard.js เรียกร่วมกัน) คำนวณ
+    // เพื่อให้กฎการตรวจสอบเหมือนกันทุกที่ (requirement ข้อ 6) — เมื่อยังไม่เปิดโหมดแบ่ง
+    // ค่าใช้จ่าย ปุ่มบันทึกใช้งานได้ตามปกติเสมอ (พฤติกรรมเดิมของรายจ่ายที่ไม่แบ่ง ไม่เปลี่ยนแปลง)
     function updateShareSummary() {
         var summary = document.getElementById('shareSummary');
+        var saveBtn = document.getElementById('formSaveBtn');
+        var toggle = document.getElementById('formShareToggle');
         if (!summary) return;
-        var totalAmount = Number(document.getElementById('formAmount').value) || 0;
-        var checkedBoxes = Array.prototype.slice.call(document.querySelectorAll('#sharePetCheckboxes input[type=checkbox]:checked'));
-        var sumShares = 0;
-        checkedBoxes.forEach(function(cb) {
-            var row = cb.closest('label');
-            var amountInput = row ? row.querySelector('input[type=number]') : null;
-            sumShares += amountInput ? (Number(amountInput.value) || 0) : 0;
-        });
-        var remaining = Math.round((totalAmount - sumShares) * 100) / 100;
-        var over = remaining < -0.001;
-        summary.innerHTML = 'จำนวนเงินรวม ฿' + totalAmount.toFixed(2) + ' — แบ่งให้สัตว์เลี้ยงตัวอื่นแล้ว ฿' + sumShares.toFixed(2)
-            + ' — <span class="' + (over ? 'text-red-600 font-medium' : 'text-gray-600') + '">'
-            + (over ? 'เกินจำนวนเงินรวม ฿' + Math.abs(remaining).toFixed(2) : 'คงเหลือสำหรับสัตว์เลี้ยงหลัก ฿' + remaining.toFixed(2))
-            + '</span>';
+
+        if (!toggle || !toggle.checked) {
+            summary.innerHTML = '';
+            if (saveBtn) saveBtn.disabled = false;
+            return;
+        }
+
+        var totalAmount = document.getElementById('formAmount').value;
+        var primaryAmount = document.getElementById('formPrimaryShareAmount').value;
+        var sharedAmounts = readSharedAmountInputs();
+        // ช่องว่าง (required แต่ยังไม่กรอก) ต้องกันปุ่มบันทึกไว้เสมอ แม้ผลรวมตัวเลข (ที่นับ
+        // ช่องว่างเป็น 0 ใน ExpenseAllocation.compute) จะบังเอิญเท่ากับยอดรวมพอดีก็ตาม —
+        // requirement ข้อ 5: ต้องกันไม่ให้ยอดที่ required ว่างเปล่าหลุดผ่านไปได้
+        var hasEmpty = primaryAmount === '' || sharedAmounts.some(function(v) { return v === ''; });
+        var r = ExpenseAllocation.compute(totalAmount, primaryAmount, sharedAmounts);
+
+        var statusText, statusCls, disableSave;
+        if (hasEmpty) {
+            statusText = 'กรุณากรอกจำนวนเงินให้ครบทุกช่อง';
+            statusCls = 'text-amber-600 font-medium';
+            disableSave = true;
+        } else if (r.status === 'valid') {
+            statusText = 'ถูกต้อง — จัดสรรครบพอดี';
+            statusCls = 'text-green-600 font-medium';
+            disableSave = false;
+        } else if (r.status === 'under') {
+            statusText = 'ยังไม่ครบ — คงเหลือ ฿' + r.remaining.toFixed(2);
+            statusCls = 'text-amber-600 font-medium';
+            disableSave = true;
+        } else {
+            statusText = 'เกินยอดรวม — เกินไป ฿' + Math.abs(r.remaining).toFixed(2);
+            statusCls = 'text-red-600 font-medium';
+            disableSave = true;
+        }
+
+        summary.innerHTML = 'ยอดรวม ฿' + r.total.toFixed(2)
+            + ' — จัดสรรแล้ว ฿' + r.allocated.toFixed(2) + ' (หลัก ฿' + r.primary.toFixed(2) + ' + แบ่ง ฿' + r.sumShared.toFixed(2) + ')'
+            + ' — <span class="' + statusCls + '">' + statusText + '</span>';
+
+        // functional requirement ข้อ 3: ปุ่มบันทึกต้องกดไม่ได้จนกว่าจะจัดสรรครบพอดีและ
+        // กรอกครบทุกช่อง
+        if (saveBtn) saveBtn.disabled = disableSave;
     }
 
     function onShareToggle() {
         var toggle = document.getElementById('formShareToggle');
         var section = document.getElementById('shareSection');
+        var primaryInput = document.getElementById('formPrimaryShareAmount');
         if (!toggle || !section) return;
         if (toggle.checked) {
+            // ค่าเริ่มต้นของสัตว์เลี้ยงหลัก = ยอดรวมทั้งหมด (ยังไม่หักส่วนแบ่งใดๆ) ผู้ใช้
+            // แก้ไขเองได้อิสระหลังจากนี้ (ไม่ auto-recalculate ทับค่าที่แก้ไขแล้ว)
+            if (primaryInput && !primaryInput.value) {
+                primaryInput.value = document.getElementById('formAmount').value || '';
+            }
             renderSharePetCheckboxes();
             section.classList.remove('hidden');
         } else {
             section.classList.add('hidden');
         }
+        updateShareSummary();
     }
 
     // อ่านรายการสัตว์เลี้ยง+จำนวนเงินที่ผู้ใช้เลือกแบ่งไว้จากฟอร์ม (ยังไม่ผ่าน validation)
@@ -515,9 +569,16 @@ var History = (function() {
 
         var shareToggle = document.getElementById('formShareToggle');
         var shareSection = document.getElementById('shareSection');
+        var primaryShareInput = document.getElementById('formPrimaryShareAmount');
         if (shareToggle) shareToggle.checked = _editingShares.length > 0;
         if (shareSection) shareSection.classList.toggle('hidden', _editingShares.length === 0);
+        if (primaryShareInput) {
+            // สัตว์เลี้ยงหลักได้ส่วนที่เหลือหลังหักส่วนแบ่งเดิมออกจากยอดรวม (ถ้ามีแบ่งไว้)
+            var existingSumShared = _editingShares.reduce(function(s, x) { return s + Number(x.share_amount || 0); }, 0);
+            primaryShareInput.value = _editingShares.length ? ExpenseAllocation.round2(e.amount - existingSumShared) : '';
+        }
         renderSharePetCheckboxes();
+        updateShareSummary();
 
         document.getElementById('expenseModalTitle').textContent = 'แก้ไขรายจ่าย';
         document.getElementById('expenseModal').classList.remove('hidden');
@@ -689,26 +750,41 @@ var History = (function() {
                 return;
             }
         }
-        // ข้อ 3.5 (requirement ข้อ 5 — Data Consistency and Validation): ตรวจสอบส่วนแบ่ง
-        // ค่าใช้จ่ายให้ครบก่อนเริ่มบันทึกอะไรเลย เช่นเดียวกับการเช็คไฟล์ใบเสร็จด้านบน
+        // ข้อ 3.5 (requirement ข้อ 3 — Save Protection): ตรวจสอบส่วนแบ่งค่าใช้จ่ายซ้ำอีกครั้ง
+        // ตอนบันทึกจริง ไม่พึ่งพา live validation ฝั่ง UI เพียงอย่างเดียว (เผื่อ DOM ถูกแก้ไข
+        // ทางอ้อม หรือปุ่มถูกกดผ่าน console) ใช้กฎเดียวกับ ExpenseAllocation ที่ live validation
+        // ใช้ (requirement ข้อ 6: ต้องเป็นกฎเดียวกันทุกที่) ค่าที่กรอกไว้ในฟอร์มจะไม่ถูกล้าง
+        // ถ้า validation ไม่ผ่าน (แค่ return ออกไปเฉยๆ ผู้ใช้แก้ไขต่อได้ทันที)
+        var toggle = document.getElementById('formShareToggle');
         var shareSelections = collectShareSelections();
-        var sharePetIdsSeen = {};
-        for (var si = 0; si < shareSelections.length; si++) {
-            var s = shareSelections[si];
-            if (isNaN(s.amount) || s.amount < 0) {
-                alert('กรุณากรอกจำนวนเงินที่แบ่งให้สัตว์เลี้ยงแต่ละตัวให้ถูกต้อง (ต้องเป็นตัวเลขไม่ติดลบ)');
+        if (toggle && toggle.checked) {
+            var sharePetIdsSeen = {};
+            for (var si = 0; si < shareSelections.length; si++) {
+                var s = shareSelections[si];
+                var vs = ExpenseAllocation.validateAmount(isNaN(s.amount) ? '' : s.amount);
+                if (vs !== 'ok') {
+                    alert('กรุณากรอกจำนวนเงินที่แบ่งให้สัตว์เลี้ยงแต่ละตัวให้ถูกต้อง (ต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง)');
+                    return;
+                }
+                if (sharePetIdsSeen[s.pet_id]) {
+                    alert('เลือกสัตว์เลี้ยงตัวเดียวกันซ้ำในการแบ่งค่าใช้จ่าย กรุณาตรวจสอบอีกครั้ง');
+                    return;
+                }
+                sharePetIdsSeen[s.pet_id] = true;
+            }
+            var primaryAmountRaw = document.getElementById('formPrimaryShareAmount').value;
+            var vp = ExpenseAllocation.validateAmount(primaryAmountRaw);
+            if (vp !== 'ok') {
+                alert('กรุณากรอกจำนวนเงินสำหรับสัตว์เลี้ยงหลักให้ถูกต้อง (ต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง)');
                 return;
             }
-            if (sharePetIdsSeen[s.pet_id]) {
-                alert('เลือกสัตว์เลี้ยงตัวเดียวกันซ้ำในการแบ่งค่าใช้จ่าย กรุณาตรวจสอบอีกครั้ง');
+            var allocResult = ExpenseAllocation.compute(amount, primaryAmountRaw, shareSelections.map(function(s) { return s.amount; }));
+            if (allocResult.status !== 'valid') {
+                alert('ยอดจัดสรรไม่ตรงกับยอดรวมทั้งหมด — ยอดรวม ฿' + allocResult.total.toFixed(2)
+                    + ' จัดสรรแล้ว ฿' + allocResult.allocated.toFixed(2)
+                    + (allocResult.status === 'under' ? ' (ยังไม่ครบ ฿' + allocResult.remaining.toFixed(2) + ')' : ' (เกิน ฿' + Math.abs(allocResult.remaining).toFixed(2) + ')'));
                 return;
             }
-            sharePetIdsSeen[s.pet_id] = true;
-        }
-        var sumShares = shareSelections.reduce(function(s, x) { return s + x.amount; }, 0);
-        if (sumShares > Number(amount) + 0.001) { // เผื่อความคลาดเคลื่อนเล็กน้อยจาก floating point
-            alert('ยอดรวมที่แบ่งให้สัตว์เลี้ยงตัวอื่น (฿' + sumShares.toFixed(2) + ') ต้องไม่เกินจำนวนเงินรวมทั้งหมด (฿' + Number(amount).toFixed(2) + ')');
-            return;
         }
         var cat = _categories.find(function(c) { return String(c.category_id) === String(catId); });
         var hidden = cat ? cat.category_type === 'แฝง' : false;

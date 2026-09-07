@@ -92,10 +92,23 @@
         document.getElementById('signupSuccess').classList.add('hidden');
         setLoading('signupBtn', true, 'กำลังสมัคร...');
 
-        var name = document.getElementById('signupName').value;
-        var email = document.getElementById('signupEmail').value;
+        var name = (document.getElementById('signupName').value || '').trim();
+        var email = (document.getElementById('signupEmail').value || '').trim();
         var password = document.getElementById('signupPassword').value;
         var role = document.getElementById('signupRole').value;
+
+        if (!name || !email || !password) {
+            showError('signupError', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+            setLoading('signupBtn', false, 'สมัครสมาชิก');
+            return;
+        }
+
+        // Proposal AC F-07 II: รหัสผ่านต้องมีความยาวไม่น้อยกว่า 8 ตัวอักษร
+        if (password.length < 8) {
+            showError('signupError', 'รหัสผ่านต้องมีความยาวไม่น้อยกว่า 8 ตัวอักษร');
+            setLoading('signupBtn', false, 'สมัครสมาชิก');
+            return;
+        }
 
         Auth.signup(email, password, { name: name, role: role })
         .then(function(response) {

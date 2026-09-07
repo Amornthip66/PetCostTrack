@@ -753,11 +753,10 @@ var History = (function() {
         var amount = document.getElementById('formAmount').value;
         var date = document.getElementById('formDate').value;
         var petId = document.getElementById('formPet').value;
-        // BR-04 (อัปเดตตามผลสำรวจ 82.6%): แนบใบเสร็จได้มากกว่า 1 ไฟล์/รายการ — ไฟล์ที่เลือก
-        // ในฟอร์มนี้จะถูก "เพิ่มเข้าไปเสริม" จากใบเสร็จเดิมที่แนบไว้แล้ว ไม่ใช่แทนที่ทั้งหมด
-        // (ลบใบเสร็จเดิมทีละไฟล์แยกต่างหากผ่านปุ่มลบในรายการ "ใบเสร็จปัจจุบัน")
         var receiptFiles = Array.prototype.slice.call(document.getElementById('formReceipt').files || []);
         if (!amount || !date || !petId || !catId || catId === '__new__') { alert('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return; }
+        // Proposal AC F-02 II: ระบบต้องตรวจสอบว่าจำนวนเงินไม่ติดลบและมากกว่า 0
+        if (isNaN(amount) || Number(amount) <= 0) { alert('กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องเป็นตัวเลขมากกว่า 0)'); return; }
         // BR-04: ไฟล์ใบเสร็จต้องเป็น .jpg/.jpeg/.png/.pdf เท่านั้น (ตรงกับ chk_receipts_filetype
         // ในฐานข้อมูล) และขนาดต้องไม่เกิน 50MB ต่อไฟล์ (ตรงกับ storage bucket limit) เช็คฝั่ง
         // client ก่อนเพื่อแจ้ง error ที่เข้าใจง่ายกว่าปล่อยให้ DB/storage ปฏิเสธ — เช็คให้ครบ

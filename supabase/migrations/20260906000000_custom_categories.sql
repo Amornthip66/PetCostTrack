@@ -18,7 +18,6 @@ ALTER TABLE categories
 UPDATE categories SET category_type = 'แฝง'
 WHERE category_name IN (
     'ค่าใช้จ่ายแฝง - ค่ารักษาพยาบาลฉุกเฉิน',
-    'ค่าใช้จ่ายแฝง - สิ่งของเสียหาย',
     'ค่าฝากเลี้ยง'
 );
 

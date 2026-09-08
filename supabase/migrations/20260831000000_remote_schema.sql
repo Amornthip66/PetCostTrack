@@ -145,14 +145,15 @@ INSERT INTO users (name, email, password, role) VALUES
     ('ปานชนก พรหมศรีสวัสดิ์', 'panchanok@example.com', '$2y$10$demoHashPlaceholder0000000000000000000001', 'Owner'),
     ('อมรทิพย์ เรืองคำ',       'amonthip@example.com',  '$2y$10$demoHashPlaceholder0000000000000000000002', 'Co-caretaker');
 
--- 2.2 หมวดหมู่ค่าใช้จ่าย (ชื่อหมวดหมู่อ้างอิงจากตัวอย่างในเอกสาร เช่น Scenario 1,
--- Scenario 3 และ Project Background ข้อ 1.1)
+-- 2.2 หมวดหมู่ค่าใช้จ่าย (ชื่อหมวดหมู่อ้างอิงจากตัวอย่างในเอกสาร เช่น Scenario 3
+-- และ Project Background ข้อ 1.1) — หมวดหมู่ที่ได้ผลโหวตต่ำจากผลสำรวจผู้ใช้
+-- (เช่น "ค่าใช้จ่ายแฝง - สิ่งของเสียหาย" ที่ได้เพียง 13%) ไม่ถูกฝังเป็นหมวดหมู่
+-- เริ่มต้นไว้ในระบบ ให้ผู้ใช้สร้างเองเพิ่มเติมได้ตาม BR-07 แทน
 INSERT INTO categories (category_name) VALUES
     ('อาหาร'),
     ('วัคซีนประจำปี'),
     ('ถ่ายพยาธิ'),
     ('ค่าใช้จ่ายแฝง - ค่ารักษาพยาบาลฉุกเฉิน'),
-    ('ค่าใช้จ่ายแฝง - สิ่งของเสียหาย'),
     ('ค่าฝากเลี้ยง');
 
 -- 2.3 สัตว์เลี้ยง (Scenario 15 กล่าวถึงสุนัข, Problem 2.1 ข้อ 3 กล่าวถึงแมว)
@@ -191,16 +192,6 @@ FROM pets p, users u, categories c
 WHERE p.name = 'น้องโบโบ้'
   AND u.email = 'panchanok@example.com'
   AND c.category_name = 'ค่าใช้จ่ายแฝง - ค่ารักษาพยาบาลฉุกเฉิน';
-
--- (b) Scenario 1: สัตว์เลี้ยงทำของในบ้านพัง ต้องซื้อของใหม่ทดแทน (ค่าใช้จ่ายแฝง)
---     บันทึกโดยปานชนก (Owner)
-INSERT INTO expenses (amount, expense_date, expense_type, pet_id, user_id, category_id)
-SELECT 450.00, CURRENT_DATE - INTERVAL '10 days', 'แฝง',
-       p.pet_id, u.user_id, c.category_id
-FROM pets p, users u, categories c
-WHERE p.name = 'น้องโบโบ้'
-  AND u.email = 'panchanok@example.com'
-  AND c.category_name = 'ค่าใช้จ่ายแฝง - สิ่งของเสียหาย';
 
 -- (c) ค่าอาหารประจำเดือนของน้องเหมียว (ค่าใช้จ่ายหลัก) บันทึกโดยอมรทิพย์
 --     (Co-caretaker บันทึกรายจ่ายของตนเองได้ ตาม Backlog #9 / BR-01)

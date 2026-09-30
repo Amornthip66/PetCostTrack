@@ -20,9 +20,20 @@ var Profile = (function() {
 
     function loadFamily() {
         var user = Auth.getUser();
-        // หา user_id ของคนที่มีสัตว์เลี้ยงร่วมกัน
-        Api.query('pet_access', 'select=user_id,access_role&pet_id=in.(select pet_id from pet_access where user_id=' + user.user_id + ')')
+        if (!user || !user.user_id) return;
+        // หา user_id ของคนที่มีสัตว์เลี้ยงร่วมกัน: ขั้นแรกดึง pet_id ของสัตว์เลี้ยงที่ตนเองมีสิทธิ์
+        Api.query('pet_access', 'select=pet_id&user_id=eq.' + user.user_id)
+        .then(function(myPets) {
+            var petIds = (myPets || []).map(function(p) { return p.pet_id; });
+            if (!petIds.length) {
+                document.getElementById('familyList').innerHTML = '<p class="text-gray-500">ยังไม่มีสมาชิกอื่นในครอบครัว</p>';
+                return null;
+            }
+            // ขั้นที่ 2 ดึงสมาชิกที่มีสิทธิ์ในสัตว์เลี้ยงเหล่านั้น (PostgREST ต้องส่งเป็นรายการ id ไม่รองรับ subquery)
+            return Api.query('pet_access', 'select=user_id,access_role&pet_id=in.(' + petIds.join(',') + ')');
+        })
         .then(function(access) {
+            if (!access) return;
             var userIds = (access || []).map(function(a) { return a.user_id; });
             userIds = userIds.filter(function(id) { return id !== user.user_id; });
             if (!userIds.length) {
@@ -39,6 +50,11 @@ var Profile = (function() {
                     + '<div><p class="text-sm font-medium text-gray-900">' + m.name + '</p><p class="text-xs text-gray-500">' + m.email + ' • ' + m.role + '</p></div>'
                     + '</div>';
             }).join('');
+        })
+        .catch(function(err) {
+            console.error('Load family error:', err);
+            var el = document.getElementById('familyList');
+            if (el) el.innerHTML = '<p class="text-red-400 text-sm">ไม่สามารถโหลดรายชื่อสมาชิกได้</p>';
         });
     }
 

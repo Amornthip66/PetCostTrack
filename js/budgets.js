@@ -95,7 +95,7 @@ var Budgets = (function() {
         // เดิม select เรียก pets(...) ซ้ำ 2 ครั้ง (pets(name) และ pets(pet_id) แยกกัน)
         // ซึ่ง PostgREST ไม่รองรับ join ตารางเดียวกันซ้ำในคำสั่งเดียว ทำให้ query error
         // และเพราะไม่มี .catch() เลย หน้าค้างที่ "กำลังโหลด..." ตลอดไปแบบเงียบๆ
-        var params = 'select=budget_id,budget_limit,budget_month,budget_year,pets(pet_id,name)&order=budget_year.desc,budget_month.desc&limit=100';
+        var params = 'select=budget_id,pet_id,budget_limit,budget_month,budget_year,pets(pet_id,name)&order=budget_year.desc,budget_month.desc&limit=100';
         if (petId) params += '&pet_id=eq.' + petId;
         if (month) params += '&budget_month=eq.' + month;
         if (year) params += '&budget_year=eq.' + year;
@@ -126,14 +126,16 @@ var Budgets = (function() {
         // เดียวกันถูกนับเป็นคนละยอดขึ้นอยู่กับว่าเปิดหน้าไหนดู — ถ้า query พร้อม join ล้มเหลว
         // (เช่น migration 20260913000000 ยังไม่ได้รัน) ให้ถอยไปดึงแบบเดิม (ไม่หักส่วนแบ่ง)
         var queries = _budgets.map(function(b) {
+            var petId = (b.pets && b.pets.pet_id) || b.pet_id;
+            if (!petId) return Promise.resolve([]);
             var mm = String(b.budget_month).padStart(2, '0');
             var mmN = String(b.budget_month + 1 > 12 ? 1 : b.budget_month + 1).padStart(2, '0');
             var yN = b.budget_month + 1 > 12 ? b.budget_year + 1 : b.budget_year;
             var dateFilter = '&expense_date=gte.' + b.budget_year + '-' + mm + '-01&expense_date=lt.' + yN + '-' + mmN + '-01';
-            return Api.query('expenses', 'select=amount,expense_pet_shares(share_amount)&pet_id=eq.' + b.pets.pet_id + dateFilter)
+            return Api.query('expenses', 'select=amount,expense_pet_shares(share_amount)&pet_id=eq.' + petId + dateFilter)
                 .catch(function(err) {
                     console.warn('expenses query with expense_pet_shares failed, falling back (migration not applied yet?):', err);
-                    return Api.query('expenses', 'select=amount&pet_id=eq.' + b.pets.pet_id + dateFilter);
+                    return Api.query('expenses', 'select=amount&pet_id=eq.' + petId + dateFilter);
                 });
         });
 

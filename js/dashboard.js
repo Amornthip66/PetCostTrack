@@ -739,6 +739,11 @@ var Dashboard = (function() {
             alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
             return;
         }
+        // Proposal AC F-02 II: ระบบต้องตรวจสอบว่าจำนวนเงินไม่ติดลบและมากกว่า 0
+        if (isNaN(amount) || Number(amount) <= 0) {
+            alert('กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องเป็นตัวเลขมากกว่า 0)');
+            return;
+        }
 
         // ข้อ 3.5 (requirement ข้อ 3 — Save Protection / ข้อ 6 — Dashboard Support):
         // ตรวจสอบส่วนแบ่งค่าใช้จ่ายด้วยกฎเดียวกับ js/history.js (ผ่าน ExpenseAllocation)

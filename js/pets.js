@@ -8,6 +8,17 @@ var Pets = (function() {
     var _familyPetId = null;
     var _archivePetId = null;
 
+    // รูปสัตว์เลี้ยง: bucket แบบ private (migration 20260930000000_pet_photos.sql)
+    // pets.image_url เก็บ path ใน bucket รูปแบบ <pet_id>/<timestamp>.<ext>
+    var PHOTO_BUCKET = 'pet-photos';
+    var PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    var PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+    var PHOTO_MAX_DIM = 1280;
+    var _photoUrls = {};
+    var _photoBlob = null;
+    var _photoRemoved = false;
+    var _editingImagePath = null;
+
     function init() {
         return load();
     }
@@ -118,8 +129,10 @@ var Pets = (function() {
         grid.innerHTML = _pets.map(function(p) {
             var isOwner = p.access_role === 'Owner';
             var emoji = (p.type_breed && p.type_breed.indexOf('แมว') >= 0) ? '🐱' : '🐶';
+            var cachedPhoto = p.image_url && _photoUrls[p.image_url];
             return '<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">'
-                + '<div class="h-32 bg-gradient-to-br from-pet-light to-blue-100 flex items-center justify-center text-6xl">' + emoji + '</div>'
+                + '<div id="petPhoto-' + p.pet_id + '" class="h-32 bg-gradient-to-br from-pet-light to-blue-100 flex items-center justify-center text-6xl overflow-hidden">'
+                + (cachedPhoto ? photoImgHtml(cachedPhoto) : emoji) + '</div>'
                 + '<div class="p-5">'
                 + '<div class="flex items-center justify-between mb-2">'
                 + '<h3 class="text-lg font-bold text-gray-900">' + p.name + '</h3>'
@@ -137,6 +150,149 @@ var Pets = (function() {
                     + '</div>'
                 + '</div></div>';
         }).join('');
+        loadPhotos();
+    }
+
+    function photoImgHtml(url) {
+        return '<img src="' + url + '" alt="" class="w-full h-full object-cover">';
+    }
+
+    // โหลดรูปแยกจาก query หลักโดยตั้งใจ: ถ้าคอลัมน์ image_url หรือ bucket ยังไม่มี
+    // (migration ยังไม่ได้รัน) การ์ดสัตว์เลี้ยงยังแสดงผลครบด้วย emoji เหมือนเดิม
+    function loadPhotos() {
+        var ids = _pets.map(function(p) { return p.pet_id; });
+        if (!ids.length) return;
+        Api.query('pets', 'select=pet_id,image_url&pet_id=in.(' + ids.join(',') + ')')
+        .then(function(rows) {
+            (rows || []).forEach(function(row) {
+                var pet = _pets.find(function(p) { return p.pet_id === row.pet_id; });
+                if (!pet) return;
+                pet.image_url = row.image_url || null;
+                if (!pet.image_url) return;
+                getPhotoUrl(pet.image_url).then(function(url) {
+                    var el = document.getElementById('petPhoto-' + pet.pet_id);
+                    if (el && pet.image_url && _photoUrls[pet.image_url] === url) el.innerHTML = photoImgHtml(url);
+                }).catch(function(err) {
+                    console.warn('Load pet photo failed:', err);
+                });
+            });
+        }).catch(function(err) {
+            console.warn('Pet photo query failed (image_url column missing?):', err);
+        });
+    }
+
+    function getPhotoUrl(path) {
+        if (_photoUrls[path]) return Promise.resolve(_photoUrls[path]);
+        return Api.downloadFileAsBlobUrl(PHOTO_BUCKET, path).then(function(url) {
+            _photoUrls[path] = url;
+            return url;
+        });
+    }
+
+    function showPhotoMsg(text) {
+        var msg = document.getElementById('petPhotoMsg');
+        if (!msg) return;
+        msg.textContent = text || '';
+        msg.classList.toggle('hidden', !text);
+    }
+
+    function showPhotoPreview(url) {
+        var wrap = document.getElementById('petPhotoPreviewWrap');
+        var img = document.getElementById('petPhotoPreview');
+        if (!wrap || !img) return;
+        if (url) {
+            img.src = url;
+            wrap.classList.remove('hidden');
+        } else {
+            img.removeAttribute('src');
+            wrap.classList.add('hidden');
+        }
+    }
+
+    // ย่อรูปใหญ่ให้ด้านยาวสุดไม่เกิน PHOTO_MAX_DIM แล้วบันทึกเป็น JPEG เพื่อให้ไฟล์เล็ก
+    // และโหลดเร็ว (รูปจากมือถือมักเกิน 5MB) — รูปเล็กอยู่แล้วส่งไฟล์เดิมไปเลย
+    function preparePhoto(file) {
+        if (PHOTO_TYPES.indexOf(file.type) < 0) {
+            return Promise.reject(new Error('ไฟล์รูปต้องเป็น .jpg, .png หรือ .webp เท่านั้น'));
+        }
+        return new Promise(function(resolve, reject) {
+            var srcUrl = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function() {
+                URL.revokeObjectURL(srcUrl);
+                var longest = Math.max(img.naturalWidth, img.naturalHeight);
+                if (longest <= PHOTO_MAX_DIM && file.size <= 1024 * 1024) { resolve(file); return; }
+                var scale = Math.min(1, PHOTO_MAX_DIM / longest);
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.naturalWidth * scale);
+                canvas.height = Math.round(img.naturalHeight * scale);
+                var ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(function(blob) {
+                    resolve(blob || file);
+                }, 'image/jpeg', 0.85);
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(srcUrl);
+                reject(new Error('เปิดไฟล์รูปนี้ไม่ได้ กรุณาเลือกรูปอื่น'));
+            };
+            img.src = srcUrl;
+        }).then(function(blob) {
+            if (blob.size > PHOTO_MAX_BYTES) throw new Error('รูปมีขนาดใหญ่เกิน 5MB กรุณาเลือกรูปที่เล็กลง');
+            return blob;
+        });
+    }
+
+    function onPhotoChange(input) {
+        var file = input.files && input.files[0];
+        showPhotoMsg('');
+        if (!file) return;
+        preparePhoto(file).then(function(blob) {
+            _photoBlob = blob;
+            _photoRemoved = false;
+            showPhotoPreview(URL.createObjectURL(blob));
+        }).catch(function(err) {
+            _photoBlob = null;
+            input.value = '';
+            showPhotoMsg(err.message || String(err));
+        });
+    }
+
+    function removePhoto() {
+        _photoBlob = null;
+        _photoRemoved = true;
+        var input = document.getElementById('formPetImage');
+        if (input) input.value = '';
+        showPhotoMsg('');
+        showPhotoPreview(null);
+    }
+
+    function photoExtension(blob) {
+        if (blob.type === 'image/png') return 'png';
+        if (blob.type === 'image/webp') return 'webp';
+        return 'jpg';
+    }
+
+    // เรียกหลังบันทึกข้อมูลสัตว์เลี้ยงสำเร็จแล้วเท่านั้น ถ้าส่วนรูปพัง ข้อมูลสัตว์เลี้ยงยังอยู่ครบ
+    function applyPhotoChange(petId, oldPath) {
+        if (_photoBlob) {
+            var path = petId + '/' + Date.now() + '.' + photoExtension(_photoBlob);
+            return Api.uploadFile(PHOTO_BUCKET, path, _photoBlob)
+                .then(function() { return Api.update('pets', 'pet_id=eq.' + petId, { image_url: path }); })
+                .then(function() {
+                    if (oldPath && oldPath !== path) {
+                        Api.removeFile(PHOTO_BUCKET, oldPath).catch(function(err) { console.warn('Remove old pet photo failed:', err); });
+                    }
+                });
+        }
+        if (_photoRemoved && oldPath) {
+            return Api.update('pets', 'pet_id=eq.' + petId, { image_url: null }).then(function() {
+                Api.removeFile(PHOTO_BUCKET, oldPath).catch(function(err) { console.warn('Remove pet photo failed:', err); });
+            });
+        }
+        return Promise.resolve();
     }
 
     // chk_pets_gender ในฐานข้อมูลจริงยอมรับเฉพาะค่าภาษาอังกฤษ (Male/Female)
@@ -165,6 +321,13 @@ var Pets = (function() {
         document.getElementById('formPetAdoptionDate').value = pet ? (pet.adoption_date || '') : '';
         document.getElementById('formPetMicrochip').value = pet ? (pet.microchip || '') : '';
         document.getElementById('petModalTitle').textContent = pet ? 'แก้ไขสัตว์เลี้ยง' : 'เพิ่มสัตว์เลี้ยงใหม่';
+        _photoBlob = null;
+        _photoRemoved = false;
+        _editingImagePath = pet ? (pet.image_url || null) : null;
+        var photoInput = document.getElementById('formPetImage');
+        if (photoInput) photoInput.value = '';
+        showPhotoMsg('');
+        showPhotoPreview(_editingImagePath ? (_photoUrls[_editingImagePath] || null) : null);
         document.getElementById('petModal').classList.remove('hidden');
     }
 
@@ -226,12 +389,27 @@ var Pets = (function() {
             });
         }
 
-        promise.then(function() {
+        var saveBtn = document.getElementById('petSaveBtn');
+        if (saveBtn) saveBtn.disabled = true;
+        var oldPath = id ? _editingImagePath : null;
+
+        promise.then(function(result) {
+            var row = Array.isArray(result) ? result[0] : result;
+            var petId = id ? Number(id) : (row && row.pet_id);
+            var photoStep = petId ? applyPhotoChange(petId, oldPath) : Promise.resolve();
+            if (!petId && _photoBlob) console.warn('Pet saved but new pet_id not returned; photo skipped');
+            return photoStep.catch(function(err) {
+                console.error('Save pet photo error:', err);
+                alert('บันทึกข้อมูลสัตว์เลี้ยงแล้ว แต่บันทึกรูปภาพไม่สำเร็จ: ' + (err.message || err));
+            });
+        }).then(function() {
             closeModal();
             load();
         }).catch(function(e) {
             console.error('Save pet error:', e);
             alert('เกิดข้อผิดพลาด: ' + (e.message || e));
+        }).then(function() {
+            if (saveBtn) saveBtn.disabled = false;
         });
     }
 
@@ -290,8 +468,13 @@ var Pets = (function() {
     // (แนะนำให้ใช้ "เก็บเข้าคลัง" แทนถ้าต้องการรักษาประวัติค่าใช้จ่ายเดิมไว้)
     function remove(petId) {
         if (!confirm('ต้องการลบสัตว์เลี้ยงตัวนี้ถาวรหรือไม่?\n\nการลบถาวรจะลบประวัติค่าใช้จ่าย งบประมาณ และการแจ้งเตือนที่ผูกกับสัตว์เลี้ยงตัวนี้ทั้งหมด และกู้คืนไม่ได้\n\nถ้าสัตว์เลี้ยงเสียชีวิตหรือย้ายไปอยู่ในความดูแลของผู้อื่น แนะนำให้ใช้ "เก็บเข้าคลัง" แทน เพื่อรักษาประวัติไว้')) return;
+        var pet = _pets.find(function(p) { return p.pet_id === petId; });
+        var photoPath = pet && pet.image_url;
         Api.remove('pets', 'pet_id=eq.' + petId)
-            .then(function() { load(); })
+            .then(function() {
+                if (photoPath) Api.removeFile(PHOTO_BUCKET, photoPath).catch(function(err) { console.warn('Remove pet photo failed:', err); });
+                load();
+            })
             .catch(function(err) { alert('ไม่สามารถลบสัตว์เลี้ยงได้: ' + (err.message || err)); });
     }
 
@@ -397,6 +580,7 @@ var Pets = (function() {
 
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove,
+        onPhotoChange: onPhotoChange, removePhoto: removePhoto,
         archive: archive, closeArchiveModal: closeArchiveModal, onArchiveReasonChange: onArchiveReasonChange, confirmArchive: confirmArchive,
         manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember,
         removeFamilyMember: removeFamilyMember, cancelInvitation: cancelInvitation

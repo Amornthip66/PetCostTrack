@@ -90,6 +90,17 @@
                             <label class="block text-sm font-medium text-gray-700">หมายเลขไมโครชิป</label>
                             <input id="formPetMicrochip" type="text" placeholder="ระบุหมายเลข" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
                         </div>
+                        <div>
+                            <label for="formPetImage" class="block text-sm font-medium text-gray-700">รูปภาพสัตว์เลี้ยง <span class="text-gray-400 font-normal">(ไม่บังคับ, jpg/png/webp)</span></label>
+                            <div id="petPhotoPreviewWrap" class="hidden mt-2">
+                                <div class="flex items-center gap-3">
+                                    <img id="petPhotoPreview" src="" alt="ตัวอย่างรูปสัตว์เลี้ยง" class="h-20 w-20 rounded-lg object-cover border border-gray-200">
+                                    <button type="button" onclick="Pets.removePhoto()" class="btn btn-sm btn-secondary"><i class="fa-solid fa-trash mr-1"></i>เอารูปออก</button>
+                                </div>
+                            </div>
+                            <input id="formPetImage" type="file" accept="image/jpeg,image/png,image/webp" onchange="Pets.onPhotoChange(this)" class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pet outline-none">
+                            <p id="petPhotoMsg" class="hidden mt-1 text-xs text-red-600"></p>
+                        </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
@@ -165,7 +176,7 @@
     <script src="js/api.js?v=20260913"></script>
     <script src="js/auth.js?v=20260905"></script>
     <script src="js/components.js?v=20260912"></script>
-    <script src="js/pets.js?v=20260909"></script>
+    <script src="js/pets.js?v=20260930"></script>
     <script>
         (function() {
             if (!UI.initPage('pets')) return;

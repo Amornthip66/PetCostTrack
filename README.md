@@ -79,7 +79,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 - **เปรียบเทียบภาพรวมค่าใช้จ่าย** กับเดือน/ปีที่ผ่านมา พร้อมตัวเลข % เปลี่ยนแปลงขึ้น/ลง
 
 ### 🐶 จัดการสัตว์เลี้ยง (Pet Profile Management)
-- เพิ่ม/แก้ไข/ลบโปรไฟล์สัตว์เลี้ยง
+- เพิ่ม/แก้ไข/ลบโปรไฟล์สัตว์เลี้ยง พร้อม**อัปโหลดรูปภาพ** (jpg/png/webp, รูปใหญ่ถูกย่ออัตโนมัติให้ด้านยาวไม่เกิน 1280px, เก็บบน Supabase Storage bucket `pet-photos`)
 - ระบุรายละเอียด: ชื่อ, ประเภท, สายพันธุ์ (แยกจากประเภท), เพศ, อายุ, น้ำหนัก, วันเกิด, วันที่รับเลี้ยง, หมายเลขไมโครชิป
 - ฟิลด์บังคับกรอกเฉพาะ **ชื่อ, ประเภท, เพศ** ส่วนที่เหลือกรอกหรือไม่กรอกก็ได้
 - แสดง badge สิทธิ์ (Owner / Co-caretaker) ของสัตว์เลี้ยงแต่ละตัว
@@ -128,7 +128,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 | **ฟอนต์** | Prompt (Google Fonts) |
 | **Backend / Database** | [Supabase](https://supabase.com) — PostgreSQL + Auto-generated REST API (PostgREST) |
 | **Authentication** | Supabase Auth (JWT-based session, เก็บใน `localStorage`) |
-| **File Storage** | Supabase Storage (bucket `pet-photos` สำหรับรูปสัตว์เลี้ยง และ bucket `receipts` สำหรับใบเสร็จ) |
+| **File Storage** | Supabase Storage (bucket `pet-photos` สำหรับรูปสัตว์เลี้ยง และ bucket `receipts` สำหรับไฟล์ใบเสร็จ — ทั้งคู่เป็นแบบ private) |
 | **Deployment** | Vercel (Static Hosting พร้อม clean URL rewrites) |
 
 > **หมายเหตุด้านสถาปัตยกรรม:** ฝั่ง Frontend เรียก Supabase โดยตรงผ่าน `fetch()` ไปยัง REST/Auth/Storage endpoint (ดูที่ `js/api.js` และ `js/auth.js`) — **ไม่ได้ใช้ Supabase JS SDK และไม่มีขั้นตอน build/bundle ใดๆ** จึงสามารถเปิดไฟล์ `.html` หรือเสิร์ฟด้วย static file server ธรรมดาได้ทันที การควบคุมสิทธิ์การเข้าถึงข้อมูลทั้งหมดทำที่ระดับฐานข้อมูลผ่าน **Row Level Security (RLS)** ไม่ใช่ที่โค้ดฝั่ง Frontend
@@ -142,7 +142,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 | ตาราง | คำอธิบาย |
 |---|---|
 | `users` | ผู้ใช้งานระบบ (ชื่อ, อีเมล, บทบาทระดับบัญชี Owner/Co-caretaker, เชื่อมกับ Supabase Auth ผ่าน `auth_id`) |
-| `pets` | โปรไฟล์สัตว์เลี้ยง (ชื่อ, ประเภท, สายพันธุ์, เพศ, น้ำหนัก, วันเกิด, วันที่รับเลี้ยง, ไมโครชิป, รูปภาพ, สถานะเก็บเข้าคลัง) |
+| `pets` | โปรไฟล์สัตว์เลี้ยง (ชื่อ, ประเภท, สายพันธุ์, เพศ, น้ำหนัก, วันเกิด, วันที่รับเลี้ยง, ไมโครชิป, path รูปภาพ, สถานะเก็บเข้าคลัง) |
 | `pet_access` | ตารางเชื่อม (Many-to-Many) ระหว่าง `users` และ `pets` — กำหนดว่าใครมีสิทธิ์อะไร (Owner/Co-caretaker) กับสัตว์เลี้ยงตัวไหน |
 | `categories` | หมวดหมู่ค่าใช้จ่าย (เช่น อาหาร, วัคซีน, ค่ารักษาพยาบาลฉุกเฉิน) พร้อมประเภท "หลัก"/"แฝง" — ผู้ใช้สร้างหมวดหมู่ของตนเองเพิ่มได้ |
 | `expenses` | รายการค่าใช้จ่าย ผูกกับสัตว์เลี้ยงหลัก ผู้บันทึก และหมวดหมู่ แยกประเภท "หลัก"/"แฝง" |
@@ -152,7 +152,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 | `reminders` | รายการแจ้งเตือนที่เกิดซ้ำ ผูกกับสัตว์เลี้ยงและหมวดหมู่ |
 | `pet_invitations` | คำเชิญเป็นผู้ร่วมดูแล (pending/accepted/declined) ที่ส่งจาก Owner ให้สมาชิกตอบรับ/ปฏิเสธ |
 
-รวมถึง **View** `budget_summary_view` ที่คำนวณยอดใช้จริงเทียบกับงบที่ตั้งไว้แบบ derived attribute และ **Storage bucket** `pet-photos` (รูปสัตว์เลี้ยง) + `receipts` (ไฟล์ใบเสร็จ)
+รวมถึง **View** `budget_summary_view` ที่คำนวณยอดใช้จริงเทียบกับงบที่ตั้งไว้แบบ derived attribute และ **Storage bucket** `pet-photos` (รูปสัตว์เลี้ยง, สร้างโดย migration `20260930000000_pet_photos.sql`) + `receipts` (ไฟล์ใบเสร็จ)
 
 > **หมายเหตุออกแบบ Many-to-Many:** ตามผลสำรวจผู้ใช้ (ข้อ 17.3) ที่ต้องการผูก 1 Transaction กับสัตว์เลี้ยงหลายตัว ระบบใช้ตาราง junction `expense_pet_shares` (Expense Allocation) เก็บส่วนแบ่งให้สัตว์เลี้ยงตัวอื่น อย่างไรก็ตาม `expenses.pet_id` เดิมยังถูกเก็บไว้เป็น "สัตว์เลี้ยงหลัก" ของรายจ่ายนั้น เพราะ RLS งบประมาณ และ view อ้างอิง `pet_id` ทั้งหมด — ยอดสรุปใน dashboard/งบประมาณจึงคำนวณจาก `expenses.pet_id/amount` เท่านั้น ไม่นับส่วนแบ่งจากตารางนี้ (ดูรายละเอียดใน `supabase/migrations/20260913000000_expense_pet_shares.sql`)
 
@@ -303,7 +303,6 @@ python3 -m http.server 5500
 | Connect to Vet System | ต้องรอระบบฐานข้อมูลของคลินิกเปิด API มาตรฐานก่อน |
 | GPS Pet Tracker Integration | ต้องพึ่งพาอุปกรณ์ IoT ภายนอกที่ผู้ใช้ต้องซื้อเพิ่ม |
 | Pet-Friendly Location Community | เป็นฟีเจอร์เชิง Community/Location ไม่ตรงวัตถุประสงค์หลัก (Cost Tracking) |
-| อัปโหลดรูปโปรไฟล์สัตว์เลี้ยง | ไม่อยู่ใน Data Requirements ของ Proposal (ข้อ 9) และไม่กระทบการบันทึกค่าใช้จ่าย |
 | จำกัดผู้ร่วมดูแลสูงสุด 3 คน / คำเชิญหมดอายุ 7 วัน | ไม่อยู่ใน Proposal ฉบับผลสำรวจ และ Owner ยกเลิกคำเชิญที่ค้างได้เองอยู่แล้ว |
 | Social Login (Google) / 2FA | F-07 ใน Proposal ระบุเฉพาะ Email/Password และการรีเซ็ตรหัสผ่าน |
 

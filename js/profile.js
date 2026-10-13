@@ -195,15 +195,13 @@ var Profile = (function() {
         var session = Auth.getSession();
         if (!session || !session.access_token) return;
         var email = Auth.getUser().email;
-        // ใช้ Supabase Auth API ส่ง reset password email
-        fetch(CONFIG.AUTH + '/recover', {
-            method: 'POST',
-            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email })
-        }).then(function() {
+        // ส่งอีเมลลิงก์ตั้งรหัสผ่านใหม่ ลิงก์จะพาไปหน้า reset-password.html
+        Auth.requestPasswordReset(email).then(function() {
             alert('ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ' + email + ' แล้ว');
-        }).catch(function() {
-            alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
+        }).catch(function(err) {
+            if (err.status === 429) alert('ขอลิงก์บ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
+            else if (err.code === 'email_address_not_authorized' || /not authorized/i.test(err.message || '')) alert('ระบบยังส่งอีเมลถึงที่อยู่นี้ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ');
+            else alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
         });
     }
 

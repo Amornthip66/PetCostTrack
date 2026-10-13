@@ -6,7 +6,8 @@
  * ทุกหน้า เพื่อลดความเสี่ยงที่จะไปกระทบฟีเจอร์อื่นที่ไม่เกี่ยวข้อง
  *
  * แสดง toast แจ้งเตือนบนแดชบอร์ดเมื่อมีรายการแจ้งเตือน (reminders) ที่ใกล้ถึงกำหนด
- * (ภายใน 7 วัน ตรงกับตัวอย่างใน User Scenario 3 ของเอกสาร proposal) หรือเลยกำหนดไปแล้ว
+ * ตามจำนวนวันที่ผู้ใช้ตั้งไว้ในแต่ละรายการ (reminders.notify_days_before ค่าเริ่มต้น 7 วัน
+ * ตรงกับตัวอย่างใน User Scenario 3 ของเอกสาร proposal) หรือเลยกำหนดไปแล้ว
  *
  * หมายเหตุ: proposal เดิมแนะนำให้แจ้งเตือนผ่าน LINE Notify ควบคู่กับ toast ในแอป แต่
  * LINE Notify ถูกปิดให้บริการถาวรตั้งแต่ 31 มี.ค. 2025 (ประกาศทางการของ LINE Developers)
@@ -15,7 +16,7 @@
  */
 var Notifications = (function() {
 
-    var DUE_SOON_DAYS = 7;
+    var DEFAULT_NOTIFY_DAYS = 7;
     var DISMISS_KEY = 'reminderToastDismissed';
 
     function ensureContainer() {
@@ -76,7 +77,7 @@ var Notifications = (function() {
                     + '<p class="text-sm font-semibold text-gray-900">'
                         + (overdueCount
                             ? overdueCount + ' รายการเลยกำหนดแล้ว' + (dueCount ? ' และอีก ' + dueCount + ' รายการใกล้ถึงกำหนด' : '')
-                            : dueCount + ' รายการใกล้ถึงกำหนดภายใน ' + DUE_SOON_DAYS + ' วัน')
+                            : dueCount + ' รายการใกล้ถึงกำหนด')
                     + '</p>'
                     + '<ul class="mt-1.5 space-y-1">' + itemsHtml + '</ul>'
                     + (moreCount > 0 ? '<p class="text-xs text-gray-400 mt-1">และอีก ' + moreCount + ' รายการ</p>' : '')
@@ -105,17 +106,24 @@ var Notifications = (function() {
 
         if (!Auth || !Auth.isLoggedIn || !Auth.isLoggedIn()) return;
 
-        Api.query('reminders', 'select=task_id,next_due_date,is_completed,pets(name),categories(category_name)&is_completed=eq.false&order=next_due_date.asc&limit=50')
+        var base = 'task_id,next_due_date,is_completed,pets(name),categories(category_name)';
+        var filter = '&is_completed=eq.false&order=next_due_date.asc&limit=50';
+        // notify_days_before (migration 20261013100100) ถ้ายังไม่มีคอลัมน์ ใช้ 7 วันทุกรายการ
+        Api.query('reminders', 'select=' + base + ',notify_days_before' + filter)
+        .catch(function() { return Api.query('reminders', 'select=' + base + filter); })
         .then(function(rows) {
             rows = rows || [];
             var today = new Date();
             today.setHours(0, 0, 0, 0);
-            var soonCutoff = new Date(today.getTime() + DUE_SOON_DAYS * 86400000);
 
             var overdue = [], dueSoon = [];
             rows.forEach(function(r) {
-                var d = new Date(r.next_due_date);
+                // แปลง YYYY-MM-DD เป็นวันที่ตามเวลาเครื่อง (new Date('YYYY-MM-DD') จะเป็นเวลา UTC)
+                var parts = String(r.next_due_date || '').split('-');
+                var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
                 if (isNaN(d.getTime())) return;
+                var days = r.notify_days_before == null ? DEFAULT_NOTIFY_DAYS : Number(r.notify_days_before);
+                var soonCutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days);
                 if (d < today) { r._overdue = true; overdue.push(r); }
                 else if (d <= soonCutoff) { dueSoon.push(r); }
             });

@@ -211,7 +211,8 @@ var Dashboard = (function() {
         return Promise.all([
             Api.query('budgets', 'select=budget_limit&budget_month=eq.' + f.month + '&budget_year=eq.' + f.year + petFilter),
             queryExpensesForFilter('amount,expense_type', range, f.petId),
-            Api.count('pets')
+            // นับเฉพาะสัตว์เลี้ยงที่ยังดูแลอยู่ (ไม่รวมที่เก็บเข้าคลังแล้ว) จากรายการที่โหลดไว้
+            Promise.resolve(_pets.filter(function(p) { return !p.is_archived; }).length)
         ]).then(function(r) {
             var budgets = r[0] || [], expenses = r[1] || [], petCount = r[2] || 0;
             var totalBudget = budgets.reduce(function(s,b){return s+Number(b.budget_limit);},0);
@@ -308,7 +309,7 @@ var Dashboard = (function() {
             if (!ctx) return;
             _chartInstance = new Chart(ctx.getContext('2d'),{
                 type:'doughnut',
-                data:{labels:labels,datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderWidth:0,hoverOffset:4}]},
+                data:{labels:labels,datasets:[{data:values,backgroundColor:labels.map(function(l,i){return colors[i%colors.length];}),borderWidth:0,hoverOffset:4}]},
                 options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.label+': '+new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(c.parsed);}}}}}
             });
 

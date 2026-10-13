@@ -16,6 +16,49 @@
             : 'flex-1 py-2 rounded-md text-sm font-medium text-gray-500 transition';
         document.getElementById('loginForm').className = isLogin ? '' : 'hidden';
         document.getElementById('signupForm').className = !isLogin ? '' : 'hidden';
+        document.getElementById('forgotForm').className = 'hidden';
+    };
+
+    // === Forgot Password (F-07: รีเซ็ตรหัสผ่าน) ===
+    window.showForgot = function(show) {
+        document.getElementById('loginForm').className = show ? 'hidden' : '';
+        document.getElementById('forgotForm').className = show ? '' : 'hidden';
+        if (show) {
+            var loginEmail = document.getElementById('loginEmail').value.trim();
+            if (loginEmail) document.getElementById('forgotEmail').value = loginEmail;
+            hideError('forgotError');
+            document.getElementById('forgotSuccess').classList.add('hidden');
+        }
+    };
+
+    window.handleForgot = function(e) {
+        e.preventDefault();
+        hideError('forgotError');
+        document.getElementById('forgotSuccess').classList.add('hidden');
+        var email = document.getElementById('forgotEmail').value.trim();
+        if (!email) { showError('forgotError', 'กรุณากรอกอีเมล'); return; }
+        setLoading('forgotBtn', true, 'กำลังส่ง...');
+        Auth.requestPasswordReset(email)
+        .then(function() {
+            // ตอบแบบเดียวกันเสมอ ไม่บอกว่าอีเมลนี้มีบัญชีหรือไม่
+            var ok = document.getElementById('forgotSuccess');
+            ok.textContent = 'ถ้าอีเมลนี้มีบัญชีอยู่ในระบบ เราได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว กรุณาตรวจสอบกล่องจดหมาย (รวมถึง Spam)';
+            ok.classList.remove('hidden');
+            setLoading('forgotBtn', false, 'ส่งลิงก์อีกครั้ง');
+        })
+        .catch(function(err) {
+            var msg = 'ส่งลิงก์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+            if (err.status === 429 || /rate limit|security purposes/i.test(err.message || '')) {
+                msg = 'ขอลิงก์บ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่';
+            } else if (err.code === 'email_address_not_authorized' || /not authorized/i.test(err.message || '')) {
+                // SMTP เริ่มต้นของ Supabase ส่งได้เฉพาะอีเมลสมาชิกทีมโปรเจกต์ จนกว่าจะตั้ง Custom SMTP
+                msg = 'ระบบยังส่งอีเมลถึงที่อยู่นี้ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ';
+            } else if (err.status === 400 && /email/i.test(err.message || '')) {
+                msg = 'รูปแบบอีเมลไม่ถูกต้อง';
+            }
+            showError('forgotError', msg);
+            setLoading('forgotBtn', false, 'ส่งลิงก์ตั้งรหัสผ่านใหม่');
+        });
     };
 
     // === Helpers ===

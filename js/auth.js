@@ -7,6 +7,19 @@ var Auth = (function() {
     var _user = null;
     var _refreshTimer = null;
 
+    // ลิงก์รีเซ็ตรหัสผ่านในอีเมลพากลับมาพร้อม #access_token=...&type=recovery
+    // ถ้า Supabase ส่งกลับมาที่ Site URL (เช่น index.html) แทน reset-password.html
+    // (กรณียังไม่ได้เพิ่ม URL ใน Redirect URLs) ให้ส่งต่อไปหน้าตั้งรหัสผ่านใหม่พร้อม hash เดิม
+    // และไม่ให้ requireAuth()/redirectIfLoggedIn() เปลี่ยนหน้าซ้อน
+    var _recoveryRedirect = (function() {
+        var h = window.location.hash || '';
+        if (/(^|[#&])type=recovery(&|$)/.test(h) && !/reset-password(\.html)?$/.test(window.location.pathname)) {
+            window.location.replace('reset-password.html' + h);
+            return true;
+        }
+        return false;
+    })();
+
     // อ่าน response เป็น JSON อย่างปลอดภัยเสมอ: ห้ามเรียก r.json() ตรงๆ เด็ดขาด
     // เพราะถ้า body ว่างเปล่า (204, RPC ที่คืนค่า VOID ฯลฯ) r.json() จะโยน
     // error "Unexpected end of JSON input" ทันที แม้ header จะบอกว่าเป็น application/json ก็ตาม
@@ -258,8 +271,56 @@ var Auth = (function() {
         });
     }
 
+    // === Password reset (F-07) ===
+    // หน้าที่ลิงก์ในอีเมลจะพากลับมา ต้องเพิ่ม URL นี้ใน Supabase → Authentication →
+    // URL Configuration → Redirect URLs (ถ้าไม่ได้เพิ่ม Supabase จะพาไป Site URL แทน
+    // ซึ่ง _recoveryRedirect ด้านบนจะส่งต่อมาที่หน้านี้ให้เอง)
+    function resetPasswordUrl() {
+        return new URL('reset-password.html', window.location.href).href;
+    }
+
+    // ส่งอีเมลลิงก์ตั้งรหัสผ่านใหม่ — Supabase ตอบสำเร็จเหมือนกันทุกกรณี
+    // ไม่ว่าอีเมลนั้นมีบัญชีหรือไม่ (กันการเดาอีเมลสมาชิก)
+    function requestPasswordReset(email) {
+        return fetch(CONFIG.AUTH + '/recover?redirect_to=' + encodeURIComponent(resetPasswordUrl()), {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) {
+                    var err = new Error((data && (data.msg || data.message || data.error_description)) || ('recover failed (' + r.status + ')'));
+                    err.status = r.status;
+                    err.code = data && (data.error_code || data.code);
+                    throw err;
+                }
+                return data;
+            });
+        });
+    }
+
+    // ตั้งรหัสผ่านใหม่ด้วย access token จากลิงก์ในอีเมล (type=recovery)
+    function updatePassword(accessToken, newPassword) {
+        return fetch(CONFIG.AUTH + '/user', {
+            method: 'PUT',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: newPassword })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) {
+                    var err = new Error((data && (data.msg || data.message || data.error_description)) || ('update password failed (' + r.status + ')'));
+                    err.status = r.status;
+                    err.code = data && (data.error_code || data.code);
+                    throw err;
+                }
+                return data;
+            });
+        });
+    }
+
     // === Redirect ===
     function requireAuth() {
+        if (_recoveryRedirect) return false;
         if (!isLoggedIn()) {
             window.location.href = 'login.html';
             return false;
@@ -268,6 +329,7 @@ var Auth = (function() {
     }
 
     function redirectIfLoggedIn() {
+        if (_recoveryRedirect) return true;
         if (isLoggedIn()) {
             window.location.href = 'index.html';
             return true;
@@ -308,6 +370,8 @@ var Auth = (function() {
         createUserProfile: createUserProfile,
         requireAuth: requireAuth,
         redirectIfLoggedIn: redirectIfLoggedIn,
-        autoLinkUser: autoLinkUser
+        autoLinkUser: autoLinkUser,
+        requestPasswordReset: requestPasswordReset,
+        updatePassword: updatePassword
     };
 })();

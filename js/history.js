@@ -112,14 +112,20 @@ var History = (function() {
     // เงื่อนไขเดียวกับ RLS (expenses_update/expenses_delete): Owner ของสัตว์เลี้ยงตัวนั้น
     // หรือเจ้าของรายการเอง และต้องยังอยู่ในช่วงเวลาที่แก้ไข/ลบได้เท่านั้น
     function canModify(e) {
-        if (!_myUserId) return false;
+        return modifyBlockReason(e) === null;
+    }
+
+    // เหตุผลที่แก้ไข/ลบไม่ได้ ('permission' = ไม่ใช่ Owner และไม่ใช่ผู้บันทึก,
+    // 'expired' = เกินช่วงเวลาแก้ไข) หรือ null ถ้าแก้ได้ — ใช้เลือกข้อความในตาราง
+    function modifyBlockReason(e) {
+        if (!_myUserId) return 'permission';
         var petId = e.pet_id != null ? e.pet_id : (e.pets ? e.pets.pet_id : null);
         var isOwn = e.user_id != null && String(e.user_id) === String(_myUserId);
-        if (!isOwnerOfPet(petId) && !isOwn) return false;
-        if (!e.created_at) return true; // คอลัมน์ยังไม่มี (migration ไม่ได้รัน) ปล่อยผ่าน ให้ DB เช็คเองอีกชั้น
+        if (!isOwnerOfPet(petId) && !isOwn) return 'permission';
+        if (!e.created_at) return null; // คอลัมน์ยังไม่มี (migration ไม่ได้รัน) ปล่อยผ่าน ให้ DB เช็คเองอีกชั้น
         var createdMs = new Date(e.created_at).getTime();
-        if (isNaN(createdMs)) return true;
-        return (Date.now() - createdMs) <= (_editWindowDays * 86400000);
+        if (isNaN(createdMs)) return null;
+        return (Date.now() - createdMs) <= (_editWindowDays * 86400000) ? null : 'expired';
     }
 
     function populateFilters() {
@@ -319,7 +325,8 @@ var History = (function() {
             var shareBadge = shares.length
                 ? ' <span class="text-xs text-pet" title="แบ่งกับ ' + escapeHtml(shareNames) + '"><i class="fa-solid fa-link"></i> +' + shares.length + '</span>'
                 : '';
-            var canEdit = canModify(e);
+            var blockReason = modifyBlockReason(e);
+            var canEdit = blockReason === null;
             return '<tr class="hover:bg-gray-50 transition">'
                 + '<td class="px-4 py-3 text-gray-600 whitespace-nowrap">' + UI.formatDate(e.expense_date) + '</td>'
                 + '<td class="px-4 py-3"><span class="font-medium">' + (e.expense_note || cat) + '</span></td>'
@@ -335,7 +342,7 @@ var History = (function() {
                     + (canEdit
                         ? '<button onclick="History.edit(' + e.transaction_id + ')" class="text-gray-400 hover:text-pet mr-2" title="แก้ไข"><i class="fa-solid fa-pen"></i></button>'
                         + '<button onclick="History.remove(' + e.transaction_id + ')" class="text-gray-400 hover:text-red-500" title="ลบ"><i class="fa-solid fa-trash"></i></button>'
-                        : '<span class="text-gray-300 text-xs">หมดเวลาแก้ไข</span>')
+                        : '<span class="text-gray-300 text-xs" title="' + (blockReason === 'expired' ? 'แก้ไข/ลบได้ภายใน ' + _editWindowDays + ' วันหลังบันทึก' : 'Co-caretaker แก้ไข/ลบได้เฉพาะรายการที่ตัวเองบันทึก') + '">' + (blockReason === 'expired' ? 'หมดเวลาแก้ไข' : 'ไม่มีสิทธิ์แก้ไข') + '</span>')
                 + '</td>'
                 + '</tr>';
         }).join('');

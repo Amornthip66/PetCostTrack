@@ -247,6 +247,12 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# อีเมลยืนยันการสมัคร: ปุ่ม "ยืนยันอีเมล" พาไปหน้า confirm-email.html (ไม่ใช่ลิงก์ยืนยันแบบเดิม) — ใช้กับ Supabase ในเครื่อง
+# โปรเจกต์บน supabase.com ต้องวาง template นี้เองที่ Dashboard → Authentication → Emails → Confirm signup
+[auth.email.template.confirmation]
+subject = "ยืนยันอีเมลเพื่อเริ่มใช้งาน PetCostTrack"
+content_path = "./supabase/templates/confirm_signup.html"
+
 # รหัส OTP สำหรับตั้งรหัสผ่านใหม่ (reset-password.html) — ใช้กับ Supabase ในเครื่อง
 # โปรเจกต์บน supabase.com ต้องวาง template นี้เองที่ Dashboard → Authentication → Emails → Reset Password
 [auth.email.template.recovery]

@@ -91,6 +91,76 @@
         return 'เกิดข้อผิดพลาด: ' + (msg || 'กรุณาลองใหม่อีกครั้ง');
     }
 
+    function isEmailNotConfirmed(err) {
+        return !!err && (err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || ''));
+    }
+
+    // === ส่งอีเมลยืนยันการสมัครอีกครั้ง (เข้าสู่ระบบแล้วเจอ "ยังไม่ได้ยืนยันอีเมล") ===
+    // Supabase ให้ขอซ้ำได้ทุก 60 วินาที จึงนับถอยหลังบนปุ่มหลังส่งสำเร็จ
+    var RESEND_SECONDS = 60;
+    var _unconfirmedEmail = '';
+    var _resendBusy = false;
+    var _resendAt = 0;
+    var _resendTimer = null;
+
+    function showResendBox(email) {
+        _unconfirmedEmail = email;
+        setResendMsg(null, '');
+        renderResendBtn();
+        document.getElementById('resendConfirmBox').classList.remove('hidden');
+    }
+
+    function hideResendBox() {
+        document.getElementById('resendConfirmBox').classList.add('hidden');
+    }
+
+    function setResendMsg(kind, msg) {
+        var el = document.getElementById('resendConfirmMsg');
+        el.textContent = msg || '';
+        el.className = 'text-sm mt-1 ' + (msg ? '' : 'hidden ') + (kind === 'ok' ? 'text-green-600' : 'text-red-500');
+    }
+
+    function renderResendBtn() {
+        var btn = document.getElementById('resendConfirmBtn');
+        var left = Math.ceil((_resendAt - Date.now()) / 1000);
+        if (left > 0) {
+            btn.disabled = true;
+            btn.textContent = 'ส่งอีกครั้งได้ใน ' + left + ' วินาที';
+            return;
+        }
+        if (_resendTimer) { clearInterval(_resendTimer); _resendTimer = null; }
+        btn.disabled = _resendBusy;
+        btn.textContent = _resendBusy ? 'กำลังส่ง...' : 'ส่งอีเมลยืนยันอีกครั้ง';
+    }
+
+    function startResendCooldown(seconds) {
+        _resendAt = Date.now() + seconds * 1000;
+        if (_resendTimer) clearInterval(_resendTimer);
+        _resendTimer = setInterval(renderResendBtn, 1000);
+        renderResendBtn();
+    }
+
+    window.resendConfirmation = function() {
+        if (_resendBusy || _resendAt > Date.now() || !_unconfirmedEmail) return;
+        var email = _unconfirmedEmail;
+        _resendBusy = true;
+        setResendMsg(null, '');
+        renderResendBtn();
+        Auth.resendSignupConfirmation(email)
+        .then(function() {
+            _resendBusy = false;
+            setResendMsg('ok', 'ส่งอีเมลยืนยันฉบับใหม่ไปที่ ' + email + ' แล้ว กรุณากดปุ่ม “ยืนยันอีเมล” ในอีเมลฉบับล่าสุด');
+            startResendCooldown(RESEND_SECONDS);
+        })
+        .catch(function(err) {
+            _resendBusy = false;
+            var wait = /(\d+)\s*second/i.exec((err && err.message) || '');
+            if (wait && parseInt(wait[1], 10) > 0) startResendCooldown(parseInt(wait[1], 10));
+            else renderResendBtn();
+            setResendMsg('error', authErrorMessage(err, 'resend'));
+        });
+    };
+
     // === Helpers ===
     function showError(id, msg) {
         var el = document.getElementById(id);
@@ -113,6 +183,7 @@
     window.handleLogin = function(e) {
         e.preventDefault();
         hideError('loginError');
+        hideResendBox();
         setLoading('loginBtn', true, 'กำลังเข้าสู่ระบบ...');
 
         var email = document.getElementById('loginEmail').value.trim();
@@ -154,6 +225,7 @@
         }).catch(function(err) {
             console.error('Login error:', err);
             showError('loginError', authErrorMessage(err, 'login'));
+            if (isEmailNotConfirmed(err)) showResendBox(email);
             setLoading('loginBtn', false, 'เข้าสู่ระบบ');
         });
     };
@@ -215,7 +287,15 @@
             
             if (!sessionData || !sessionData.access_token) {
                 // กรณี Supabase เปิด Confirm Email ไว้
-                document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตนก่อนเข้าสู่ระบบ';
+                // อีเมลนี้สมัครและยืนยันไว้แล้ว: Supabase ตอบสำเร็จแบบไม่มี identities และไม่ได้ส่งอีเมล
+                var user = response.user || response;
+                if (user && Array.isArray(user.identities) && user.identities.length === 0) {
+                    showError('signupError', authErrorMessage({ code: 'user_already_exists' }, 'signup'));
+                    setLoading('signupBtn', false, 'สมัครสมาชิก');
+                    return;
+                }
+                document.getElementById('signupSuccess').textContent = 'สมัครสำเร็จ! เราส่งอีเมลยืนยันไปที่ ' + email
+                    + ' แล้ว กรุณากดปุ่ม “ยืนยันอีเมล” ในอีเมลก่อนเข้าสู่ระบบ (ถ้าไม่เห็น ให้ดูในโฟลเดอร์ Spam/Junk)';
                 document.getElementById('signupSuccess').classList.remove('hidden');
                 setLoading('signupBtn', false, 'สมัครสมาชิก');
                 return;

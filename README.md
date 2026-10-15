@@ -117,6 +117,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 
 ### 🔐 ระบบสมาชิก (Authentication)
 - สมัครสมาชิก / เข้าสู่ระบบ / ออกจากระบบ ผ่าน Supabase Auth (Email + Password)
+- **ยืนยันอีเมลหลังสมัคร**: อีเมลยืนยันมีปุ่ม "ยืนยันอีเมล" ที่พาไปหน้า `confirm-email.html` ของเว็บ หน้านี้ยืนยันกับ Supabase เองแล้วแสดงผลชัดเจน (สำเร็จแล้วเข้าสู่ระบบให้ทันที / ลิงก์หมดอายุหรือใช้ไปแล้ว) และขออีเมลยืนยันใหม่ได้ทั้งจากหน้านี้และจากหน้าเข้าสู่ระบบ
 - **ลืมรหัสผ่าน / เปลี่ยนรหัสผ่านด้วยรหัส OTP**: กด "ลืมรหัสผ่าน?" ที่หน้าเข้าสู่ระบบ (หรือ "เปลี่ยนรหัสผ่าน" ที่หน้าโปรไฟล์) → ระบบส่งรหัส OTP ไปที่อีเมล → กรอกรหัสพร้อมรหัสผ่านใหม่ที่หน้า `reset-password.html` (ไม่ต้องกดลิงก์ในอีเมล จึงไม่มีปัญหาลิงก์หมดอายุ/ถูกใช้ไปแล้ว)
 - ผูกบัญชีผู้ใช้ใหม่เข้ากับข้อมูลตัวอย่าง (seed data) อัตโนมัติเมื่ออีเมลตรงกัน
 - ป้องกันหน้าทุกหน้าไม่ให้เข้าถึงได้หากยังไม่ได้เข้าสู่ระบบ
@@ -202,6 +203,7 @@ PetCostTrack/
 ├── reminders.html  — หน้าการแจ้งเตือน
 ├── profile.html    — หน้าโปรไฟล์ผู้ใช้
 ├── reset-password.html — หน้าตั้งรหัสผ่านใหม่ด้วยรหัส OTP จากอีเมล
+├── confirm-email.html  — หน้าที่ปุ่ม "ยืนยันอีเมล" ในอีเมลสมัครสมาชิกพามา
 ├── style.css       — สไตล์ที่ใช้ร่วมกันทุกหน้า (dropdown, ปุ่ม ฯลฯ)
 │
 ├── js/
@@ -219,13 +221,14 @@ PetCostTrack/
 │   ├── expense-allocation.js — กฎการแบ่งรายจ่ายให้สัตว์เลี้ยงหลายตัว (ใช้ร่วมกัน 2 หน้า)
 │   ├── profile.js      — Logic หน้าโปรไฟล์
 │   ├── login.js        — Logic หน้าเข้าสู่ระบบ/สมัครสมาชิก
-│   └── reset-password.js — Logic หน้าตั้งรหัสผ่านใหม่ (ขอรหัส OTP → ยืนยันรหัส → ตั้งรหัสผ่าน)
+│   ├── reset-password.js — Logic หน้าตั้งรหัสผ่านใหม่ (ขอรหัส OTP → ยืนยันรหัส → ตั้งรหัสผ่าน)
+│   └── confirm-email.js — Logic หน้ายืนยันอีเมล (ยืนยัน token_hash → เข้าสู่ระบบ / ขออีเมลยืนยันใหม่)
 │
 ├── supabase/
 │   ├── config.toml   — การตั้งค่าโปรเจกต์ Supabase (Supabase CLI)
 │   ├── migrations/   — SQL Migration เรียงตามลำดับเวลา (สร้างตาราง, RLS, Trigger, Function, Procedure, pg_cron)
 │   ├── functions/send-reminder-emails/ — Edge Function ส่งอีเมลแจ้งเตือน
-│   └── templates/reset_password.html — template อีเมลรหัส OTP สำหรับตั้งรหัสผ่านใหม่
+│   └── templates/      — template อีเมล: confirm_signup.html (ปุ่มยืนยันอีเมล), reset_password.html (รหัส OTP ตั้งรหัสผ่านใหม่)
 │
 ├── vercel.json     — การตั้งค่า deploy บน Vercel (clean URL, security headers)
 └── .env.example    — ตัวอย่างตัวแปรสภาพแวดล้อม
@@ -242,7 +245,10 @@ PetCostTrack/
 2. สร้าง Storage bucket ชื่อ `receipts` (private) ใน Dashboard → Storage
 3. รัน migration ทั้งหมดตามลำดับ: `supabase link --project-ref <ref>` แล้ว `supabase db push` (หรือเปิด **SQL Editor** แล้วรันไฟล์ในโฟลเดอร์ `supabase/migrations/` เรียงตามชื่อไฟล์) เพื่อสร้างตาราง, ข้อมูลตัวอย่าง (seed data), RLS Policies, Trigger, Function, Procedure และ bucket `pet-photos`
    - ก่อนไฟล์ `20261013100300_schedule_daily_jobs.sql` ต้องสร้าง Vault secret 2 ค่าตามคำอธิบายในหัวไฟล์นั้น
-4. Authentication → Emails → Templates → **Reset Password**: วางเนื้อหาจาก `supabase/templates/reset_password.html` (อีเมลจะมีรหัส OTP `{{ .Token }}` แทนลิงก์) และตั้ง **Site URL** เป็นโดเมนของเว็บใน Authentication → URL Configuration
+4. Authentication → Emails → Templates:
+   - **Confirm signup**: Subject `ยืนยันอีเมลเพื่อเริ่มใช้งาน PetCostTrack` และวางเนื้อหาจาก `supabase/templates/confirm_signup.html` (ปุ่ม "ยืนยันอีเมล" พาไปหน้า `confirm-email.html` ของเว็บ)
+   - **Reset Password**: วางเนื้อหาจาก `supabase/templates/reset_password.html` (อีเมลจะมีรหัส OTP `{{ .Token }}` แทนลิงก์)
+   - ตั้ง **Site URL** เป็นโดเมนของเว็บใน Authentication → URL Configuration (ถ้าต้องการให้ปุ่มยืนยันอีเมลพากลับมาที่เครื่องตอนทดสอบ เช่น `http://127.0.0.1:5500` ให้เพิ่ม `http://127.0.0.1:5500/**` ใน **Redirect URLs** ด้วย)
 5. Deploy Edge Function แจ้งเตือนทางอีเมลตาม `supabase/functions/send-reminder-emails/README.md`
 
 ### 2. ตั้งค่าการเชื่อมต่อ

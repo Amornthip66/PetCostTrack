@@ -45,13 +45,20 @@ var Pets = (function() {
     // mapPet()/openModal() ทุกจุด
     var PET_FIELDS_FULL = 'pet_id,name,type_breed,type:pet_type,gender,breed,age,weight:weight_kg,birthdate:birth_date,adoption_date,microchip:microchip_id';
     var PET_FIELDS_BASIC = 'pet_id,name,type_breed,age';
+    // age_months (อายุส่วนที่เป็นเดือน) มาจาก migration 20261015120000_pet_age_months.sql
+    // ถ้ายังไม่ได้รัน migration ให้ถอยไปดึงชุดคอลัมน์เดิม (อายุแสดงเป็นปีอย่างเดียว)
+    var PET_FIELD_SETS = [PET_FIELDS_FULL + ',age_months', PET_FIELDS_FULL, PET_FIELDS_BASIC];
 
     function queryPetsWithFallback() {
-        return queryActivePetsResilient('select=' + PET_FIELDS_FULL)
-        .catch(function(err) {
-            console.warn('pets query with extended fields failed, falling back to basic fields:', err);
-            return queryActivePetsResilient('select=' + PET_FIELDS_BASIC);
-        });
+        function attempt(i) {
+            return queryActivePetsResilient('select=' + PET_FIELD_SETS[i])
+            .catch(function(err) {
+                if (i + 1 >= PET_FIELD_SETS.length) throw err;
+                console.warn('pets query failed, falling back to fewer fields:', err);
+                return attempt(i + 1);
+            });
+        }
+        return attempt(0);
     }
 
     function mapPet(p, accessRole) {
@@ -63,6 +70,7 @@ var Pets = (function() {
             gender: p.gender,
             breed: p.breed,
             age: p.age,
+            age_months: Number(p.age_months) || 0,
             weight: p.weight,
             birthdate: p.birthdate,
             adoption_date: p.adoption_date,
@@ -139,7 +147,7 @@ var Pets = (function() {
                 + '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + (isOwner ? 'bg-pet-light text-pet' : 'bg-green-100 text-green-700') + '">' + p.access_role + '</span>'
                 + '</div>'
                 + '<p class="text-sm text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + '</p>'
-                + '<p class="text-sm text-gray-500">' + (p.age ? p.age + ' ปี' : 'ไม่ระบุอายุ') + '</p>'
+                + '<p class="text-sm text-gray-500">' + (UI.formatPetAge(p.age, p.age_months) || 'ไม่ระบุอายุ') + '</p>'
                 // Co-caretaker แก้ไขข้อมูลโปรไฟล์สัตว์เลี้ยงได้ แต่จัดการครอบครัว/เก็บเข้าคลัง/
                 // ลบถาวรได้เฉพาะ Owner เท่านั้น (บังคับจริงที่ RLS ฝั่งฐานข้อมูลด้วย ไม่ใช่แค่ซ่อนปุ่ม)
                 + '<div class="mt-4 flex gap-2">'
@@ -315,8 +323,12 @@ var Pets = (function() {
         document.getElementById('formPetType').value = pet ? (pet.type || '') : '';
         document.getElementById('formPetGender').value = pet ? mapGenderToUi(pet.gender) : '';
         document.getElementById('formPetBreed').value = pet ? (pet.breed || pet.type_breed || '') : '';
-        document.getElementById('formPetAge').value = pet ? (pet.age || '') : '';
-        document.getElementById('formPetWeight').value = pet ? (pet.weight || '') : '';
+        // อายุ 0 ปีเป็นค่าที่ถูกต้อง (เช่น ลูกแมว 0 ปี 5 เดือน) จึงเช็ค null แทนการใช้ ||
+        document.getElementById('formPetAge').value = (pet && pet.age !== null && pet.age !== undefined) ? pet.age : '';
+        document.getElementById('formPetAgeMonths').value = (pet && pet.age_months) ? pet.age_months : '';
+        document.getElementById('formPetWeight').value = (pet && pet.weight !== null && pet.weight !== undefined) ? pet.weight : '';
+        showAgeError(null);
+        showWeightError(null);
         document.getElementById('formPetBirthdate').value = pet ? (pet.birthdate || '') : '';
         document.getElementById('formPetAdoptionDate').value = pet ? (pet.adoption_date || '') : '';
         document.getElementById('formPetMicrochip').value = pet ? (pet.microchip || '') : '';
@@ -338,34 +350,172 @@ var Pets = (function() {
         if (pet) openModal(pet);
     }
 
+    // === ตรวจอายุ (ปี + เดือน) และน้ำหนัก ก่อนบันทึก ===
+    // ค่าที่ฐานข้อมูลรับได้: age >= 0 (smallint), age_months 0–11, weight_kg > 0 และไม่เกิน 999.99 (numeric(5,2))
+    var AGE_MAX_YEARS = 150;
+    var WEIGHT_MAX = 999.99;
+    var AGE_MONTHS_MIGRATION_MSG = 'ยังบันทึกอายุส่วนที่เป็นเดือนไม่ได้ เพราะฐานข้อมูลยังไม่ได้อัปเดต '
+        + '(ต้องรันไฟล์ supabase/migrations/20261015120000_pet_age_months.sql ใน Supabase ก่อน) ตอนนี้กรอกได้เฉพาะจำนวนปี';
+
+    // อ่านช่องตัวเลข: { empty } / { bad } (พิมพ์ไม่ใช่ตัวเลข) / { value }
+    function readNumber(id) {
+        var el = document.getElementById(id);
+        if (el.validity && el.validity.badInput) return { bad: true };
+        var raw = String(el.value || '').trim();
+        if (raw === '') return { empty: true };
+        var n = Number(raw);
+        return isFinite(n) ? { value: n } : { bad: true };
+    }
+
+    function isWholeNumber(n) { return Math.floor(n) === n; }
+
+    // คืน { years, months } หรือ { error, field } (error เป็นข้อความภาษาไทย)
+    // requireValue = true ตอนกดบันทึก (อายุเป็นช่องบังคับ ต้องกรอกปีหรือเดือนอย่างน้อย 1 ช่อง)
+    function validateAge(requireValue) {
+        var y = readNumber('formPetAge');
+        var m = readNumber('formPetAgeMonths');
+        if (y.bad) return { error: 'อายุ (ปี) ต้องเป็นตัวเลข', field: 'formPetAge' };
+        if (m.bad) return { error: 'อายุ (เดือน) ต้องเป็นตัวเลข', field: 'formPetAgeMonths' };
+        if (!y.empty && y.value < 0) return { error: 'อายุ (ปี) กรอกค่าน้อยกว่า 0 ไม่ได้', field: 'formPetAge' };
+        if (!m.empty && m.value < 0) return { error: 'อายุ (เดือน) กรอกค่าน้อยกว่า 0 ไม่ได้', field: 'formPetAgeMonths' };
+        if (!y.empty && !isWholeNumber(y.value)) return { error: 'อายุ (ปี) ต้องเป็นจำนวนเต็ม', field: 'formPetAge' };
+        if (!m.empty && !isWholeNumber(m.value)) return { error: 'อายุ (เดือน) ต้องเป็นจำนวนเต็ม', field: 'formPetAgeMonths' };
+        if (!y.empty && y.value > AGE_MAX_YEARS) return { error: 'อายุ (ปี) ต้องไม่เกิน ' + AGE_MAX_YEARS + ' ปี', field: 'formPetAge' };
+        if (!m.empty && m.value > 11) return { error: 'อายุ (เดือน) กรอกได้ 0–11 เดือน (ครบ 12 เดือนให้นับเป็น 1 ปี)', field: 'formPetAgeMonths' };
+        if (requireValue && y.empty && m.empty) return { error: 'กรุณากรอกอายุ (ปี และ/หรือ เดือน)', field: 'formPetAge' };
+        return { years: y.empty ? 0 : y.value, months: m.empty ? 0 : m.value };
+    }
+
+    // คืน { value } (null = ไม่ได้กรอก) หรือ { error, field } — ปัดเป็นทศนิยม 2 ตำแหน่งแบบเดียวกับฐานข้อมูล
+    function validateWeight() {
+        var w = readNumber('formPetWeight');
+        if (w.bad) return { error: 'น้ำหนักต้องเป็นตัวเลข', field: 'formPetWeight' };
+        if (w.empty) return { value: null };
+        if (w.value < 0) return { error: 'น้ำหนัก กรอกค่าน้อยกว่า 0 ไม่ได้', field: 'formPetWeight' };
+        var rounded = Math.round(w.value * 100) / 100;
+        if (rounded <= 0) return { error: 'น้ำหนักต้องมากกว่า 0 กก. (ถ้าไม่ทราบน้ำหนัก ให้เว้นว่างไว้)', field: 'formPetWeight' };
+        if (rounded > WEIGHT_MAX) return { error: 'น้ำหนักต้องไม่เกิน ' + WEIGHT_MAX + ' กก.', field: 'formPetWeight' };
+        return { value: rounded };
+    }
+
+    function setInputInvalid(id, invalid) {
+        var input = document.getElementById(id);
+        if (!input) return;
+        input.classList.toggle('border-red-500', invalid);
+        input.classList.toggle('border-gray-300', !invalid);
+    }
+
+    function setMessage(id, message) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = message || '';
+        el.classList.toggle('hidden', !message);
+    }
+
+    // r = ผลจาก validateAge()/validateWeight() (null = ล้างข้อความ)
+    function showAgeError(r) {
+        var field = r && r.error ? r.field : null;
+        setInputInvalid('formPetAge', field === 'formPetAge');
+        setInputInvalid('formPetAgeMonths', field === 'formPetAgeMonths');
+        setMessage('petAgeError', field ? r.error : '');
+    }
+
+    function showWeightError(r) {
+        var message = r && r.error ? r.error : '';
+        setInputInvalid('formPetWeight', !!message);
+        setMessage('petWeightError', message);
+    }
+
+    // ตรวจทันทีระหว่างพิมพ์ (ยังไม่บังคับกรอก) — แจ้งเตือนใต้ช่องเมื่อกรอกค่าติดลบ/ผิดรูปแบบ
+    function checkAgeInput() {
+        var r = validateAge(false);
+        showAgeError(r);
+        return r;
+    }
+
+    function checkWeightInput() {
+        var r = validateWeight();
+        showWeightError(r);
+        return r;
+    }
+
+    // แปลง error จากฐานข้อมูล (CHECK constraint ฯลฯ) เป็นข้อความภาษาไทย
+    function petSaveErrorMessage(e) {
+        var msg = (e && e.message) || String(e || '');
+        if (msg === AGE_MONTHS_MIGRATION_MSG) return msg;
+        if (/chk_pets_age_months/.test(msg)) return 'อายุ (เดือน) กรอกได้ 0–11 เดือน และกรอกค่าน้อยกว่า 0 ไม่ได้';
+        if (/chk_pets_age/.test(msg)) return 'อายุ (ปี) กรอกค่าน้อยกว่า 0 ไม่ได้';
+        if (/chk_pets_weight/.test(msg)) return 'น้ำหนักต้องมากกว่า 0 กก. (กรอกค่าน้อยกว่าหรือเท่ากับ 0 ไม่ได้)';
+        if (/numeric field overflow/i.test(msg)) return 'น้ำหนักต้องไม่เกิน ' + WEIGHT_MAX + ' กก.';
+        if (/out of range for type smallint/i.test(msg)) return 'อายุ (ปี) ต้องไม่เกิน ' + AGE_MAX_YEARS + ' ปี';
+        return 'เกิดข้อผิดพลาด: ' + msg;
+    }
+
+    // ฐานข้อมูลยังไม่มีคอลัมน์ age_months / ฟังก์ชันยังไม่รับ p_age_months (ยังไม่ได้รัน migration)
+    function isAgeMonthsMissing(err) {
+        var msg = (err && err.message) || '';
+        return /age_months/.test(msg) && /could not find|schema cache|does not exist/i.test(msg);
+    }
+
+    // ส่งค่าเดือนไปด้วยเสมอ ถ้าฐานข้อมูลยังไม่รองรับ: เดือน = 0 → ส่งใหม่แบบเดิม (ไม่เสียข้อมูล)
+    // เดือน > 0 → แจ้งให้รัน migration แทนการทิ้งค่าเดือนไปเงียบๆ
+    function withAgeMonthsFallback(months, send) {
+        return send(true).catch(function(err) {
+            if (!isAgeMonthsMissing(err)) throw err;
+            if (months > 0) throw new Error(AGE_MONTHS_MIGRATION_MSG);
+            console.warn('age_months not in database yet, saving without it:', err);
+            return send(false);
+        });
+    }
+
     function save() {
         var id = document.getElementById('formPetId').value;
         var breed = document.getElementById('formPetBreed').value.trim() || null;
         var genderUi = document.getElementById('formPetGender').value;
         var typeVal = document.getElementById('formPetType').value.trim();
-        var ageVal = document.getElementById('formPetAge').value ? Number(document.getElementById('formPetAge').value) : null;
         var name = document.getElementById('formPetName').value.trim();
         if (!name) { alert('กรุณากรอกชื่อสัตว์เลี้ยง'); return; }
         if (!typeVal) { alert('กรุณากรอกประเภทสัตว์เลี้ยง'); return; }
         if (!genderUi) { alert('กรุณาเลือกเพศ'); return; }
-        if (ageVal === null) { alert('กรุณากรอกอายุ'); return; }
+        var age = validateAge(true);
+        showAgeError(age);
+        if (age.error) {
+            alert(age.error);
+            document.getElementById(age.field).focus();
+            return;
+        }
+        var weight = validateWeight();
+        showWeightError(weight);
+        if (weight.error) {
+            alert(weight.error);
+            document.getElementById('formPetWeight').focus();
+            return;
+        }
+        var ageVal = age.years;
+        var ageMonths = age.months;
+        var weightVal = weight.value;
 
         var promise;
         if (id) {
             // แก้ไขสัตว์เลี้ยงเดิม: ใช้ชื่อคอลัมน์จริงในตาราง pets (ไม่ตรงกับชื่อที่
             // migration ในโค้ดสมมติไว้ — ของจริงคือ pet_type/weight_kg/birth_date/
             // microchip_id ดูรายละเอียดที่ 20260910000000_fix_pet_schema_drift.sql)
-            promise = Api.update('pets', 'pet_id=eq.' + id, {
+            var updateRow = {
                 name: name,
                 pet_type: typeVal,
                 gender: mapGenderToDb(genderUi),
                 type_breed: breed,
                 breed: breed,
                 age: ageVal,
-                weight_kg: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
+                weight_kg: weightVal,
                 birth_date: document.getElementById('formPetBirthdate').value || null,
                 adoption_date: document.getElementById('formPetAdoptionDate').value || null,
                 microchip_id: document.getElementById('formPetMicrochip').value.trim() || null
+            };
+            promise = withAgeMonthsFallback(ageMonths, function(withMonths) {
+                var row = Object.assign({}, updateRow);
+                if (withMonths) row.age_months = ageMonths;
+                return Api.update('pets', 'pet_id=eq.' + id, row);
             });
         } else {
             // ใช้ RPC create_pet_with_owner แทนการ insert pets + pet_access แยกกัน 2 request
@@ -375,17 +525,22 @@ var Pets = (function() {
             // ที่ migration 20260909000000_create_pet_with_owner.sql) — ฟังก์ชันนี้ insert
             // ทั้งสองตารางในทรานแซกชันเดียวกัน ปิดช่องว่างนั้นไปเลย (ฟังก์ชันแปลงค่า
             // เพศเป็นภาษาอังกฤษให้เองอยู่แล้วด้วย)
-            promise = Api.rpc('create_pet_with_owner', {
+            var createArgs = {
                 p_name: name,
                 p_type: typeVal,
                 p_gender: mapGenderToDb(genderUi),
                 p_age: ageVal,
                 p_type_breed: breed,
                 p_breed: breed,
-                p_weight: document.getElementById('formPetWeight').value ? Number(document.getElementById('formPetWeight').value) : null,
+                p_weight: weightVal,
                 p_birthdate: document.getElementById('formPetBirthdate').value || null,
                 p_adoption_date: document.getElementById('formPetAdoptionDate').value || null,
                 p_microchip: document.getElementById('formPetMicrochip').value.trim() || null
+            };
+            promise = withAgeMonthsFallback(ageMonths, function(withMonths) {
+                var args = Object.assign({}, createArgs);
+                if (withMonths) args.p_age_months = ageMonths;
+                return Api.rpc('create_pet_with_owner', args);
             });
         }
 
@@ -407,7 +562,7 @@ var Pets = (function() {
             load();
         }).catch(function(e) {
             console.error('Save pet error:', e);
-            alert('เกิดข้อผิดพลาด: ' + (e.message || e));
+            alert(petSaveErrorMessage(e));
         }).then(function() {
             if (saveBtn) saveBtn.disabled = false;
         });
@@ -580,7 +735,7 @@ var Pets = (function() {
 
     return {
         init: init, load: load, openModal: openModal, closeModal: closeModal, edit: edit, save: save, remove: remove,
-        onPhotoChange: onPhotoChange, removePhoto: removePhoto,
+        onPhotoChange: onPhotoChange, removePhoto: removePhoto, checkAgeInput: checkAgeInput, checkWeightInput: checkWeightInput,
         archive: archive, closeArchiveModal: closeArchiveModal, onArchiveReasonChange: onArchiveReasonChange, confirmArchive: confirmArchive,
         manageFamily: manageFamily, closeFamilyModal: closeFamilyModal, addFamilyMember: addFamilyMember,
         removeFamilyMember: removeFamilyMember, cancelInvitation: cancelInvitation

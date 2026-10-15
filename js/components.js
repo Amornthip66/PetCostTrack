@@ -97,6 +97,19 @@ var UI = (function() {
         return formatDate(s) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
     }
 
+    // อายุสัตว์เลี้ยงจาก pets.age (ปี) + pets.age_months (เดือน 0–11)
+    // เช่น "2 ปี 3 เดือน", "2 ปี", "5 เดือน", 0 ปี 0 เดือน → "ไม่ถึง 1 เดือน", ไม่มีข้อมูล → ''
+    function formatPetAge(years, months) {
+        var y = (years === null || years === undefined || years === '') ? null : Number(years);
+        var m = Number(months) || 0;
+        if (y !== null && isNaN(y)) y = null;
+        if (y === null && !m) return '';
+        var parts = [];
+        if (y) parts.push(y + ' ปี');
+        if (m) parts.push(m + ' เดือน');
+        return parts.length ? parts.join(' ') : 'ไม่ถึง 1 เดือน';
+    }
+
     function getIcon(c) {
         if (!c) return {i:'fa-receipt',bg:'bg-gray-100',cl:'text-gray-500'};
         var n = c.toLowerCase();
@@ -128,5 +141,5 @@ var UI = (function() {
         return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + cls + '">' + label + '</span>';
     }
 
-    return { renderNav: renderNav, toggleMobileNav: toggleMobileNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, getIcon: getIcon, recorderBadge: recorderBadge };
+    return { renderNav: renderNav, toggleMobileNav: toggleMobileNav, initPage: initPage, fmt: fmt, formatDate: formatDate, formatDateTime: formatDateTime, formatPetAge: formatPetAge, getIcon: getIcon, recorderBadge: recorderBadge };
 })();

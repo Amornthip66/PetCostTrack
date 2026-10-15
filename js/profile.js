@@ -155,10 +155,13 @@ var Profile = (function() {
             var petIds = access.map(function(a) { return a.pet_id; });
             if (!petIds.length) { list.innerHTML = '<p class="text-gray-500">ยังไม่มีสัตว์เลี้ยงในคลัง</p>'; return; }
 
-            return Api.query('pets',
-                'select=pet_id,name,type_breed,age,archived_note,archived_at&pet_id=in.(' + petIds.join(',') + ')'
-                + '&is_archived=eq.true&order=archived_at.desc'
-            ).then(function(pets) {
+            // age_months มาจาก migration 20261015120000_pet_age_months.sql — ถ้ายังไม่ได้รัน ดึงแบบเดิม
+            var archiveFilter = '&pet_id=in.(' + petIds.join(',') + ')&is_archived=eq.true&order=archived_at.desc';
+            return Api.query('pets', 'select=pet_id,name,type_breed,age,age_months,archived_note,archived_at' + archiveFilter)
+            .catch(function(err) {
+                console.warn('archived pets query with age_months failed, retrying without it:', err);
+                return Api.query('pets', 'select=pet_id,name,type_breed,age,archived_note,archived_at' + archiveFilter);
+            }).then(function(pets) {
                 pets = pets || [];
                 if (!pets.length) { list.innerHTML = '<p class="text-gray-500">ยังไม่มีสัตว์เลี้ยงในคลัง</p>'; return; }
 
@@ -168,7 +171,7 @@ var Profile = (function() {
                         + '<div class="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center"><i class="fa-solid fa-paw"></i></div>'
                         + '<div class="flex-1 min-w-0">'
                         + '<p class="text-sm font-medium text-gray-900">' + p.name + '</p>'
-                        + '<p class="text-xs text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + (p.age ? ' • ' + p.age + ' ปี' : '') + '</p>'
+                        + '<p class="text-xs text-gray-500">' + (p.type_breed || 'ไม่ระบุพันธุ์') + (UI.formatPetAge(p.age, p.age_months) ? ' • ' + UI.formatPetAge(p.age, p.age_months) : '') + '</p>'
                         + '<p class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-box-archive mr-1"></i>' + (p.archived_note || '') + (p.archived_at ? ' • ' + UI.formatDate(p.archived_at) : '') + '</p>'
                         + '</div>'
                         + (isOwner ? '<button onclick="Profile.restorePet(' + p.pet_id + ')" class="btn btn-sm btn-outline-primary flex-shrink-0" title="กู้คืน"><i class="fa-solid fa-rotate-left mr-1"></i>กู้คืน</button>' : '')

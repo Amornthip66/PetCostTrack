@@ -16,50 +16,80 @@
             : 'flex-1 py-2 rounded-md text-sm font-medium text-gray-500 transition';
         document.getElementById('loginForm').className = isLogin ? '' : 'hidden';
         document.getElementById('signupForm').className = !isLogin ? '' : 'hidden';
-        document.getElementById('forgotForm').className = 'hidden';
     };
 
-    // === Forgot Password (F-07: รีเซ็ตรหัสผ่าน) ===
-    window.showForgot = function(show) {
-        document.getElementById('loginForm').className = show ? 'hidden' : '';
-        document.getElementById('forgotForm').className = show ? '' : 'hidden';
-        if (show) {
-            var loginEmail = document.getElementById('loginEmail').value.trim();
-            if (loginEmail) document.getElementById('forgotEmail').value = loginEmail;
-            hideError('forgotError');
-            document.getElementById('forgotSuccess').classList.add('hidden');
+    // === Forgot Password (F-07: รีเซ็ตรหัสผ่านด้วยรหัส OTP) ===
+    // ลิงก์ "ลืมรหัสผ่าน?" ไปหน้า reset-password.html — ส่งอีเมลที่กรอกไว้ไปเติมให้ (ผ่าน sessionStorage
+    // ไม่ใส่ใน URL) ถ้าใช้ sessionStorage ไม่ได้ ลิงก์ก็ยังพาไปหน้าตั้งรหัสผ่านตามปกติ
+    window.goToReset = function() {
+        try {
+            var email = document.getElementById('loginEmail').value.trim();
+            if (email) sessionStorage.setItem('pct_reset_email', JSON.stringify(email));
+        } catch (e) { /* ignore */ }
+        return true;
+    };
+
+    // กลับมาจากหน้าตั้งรหัสผ่านใหม่สำเร็จ → เติมอีเมลให้ในช่องเข้าสู่ระบบ
+    (function prefillLoginEmail() {
+        try {
+            var raw = sessionStorage.getItem('pct_login_email');
+            if (!raw) return;
+            sessionStorage.removeItem('pct_login_email');
+            var email = JSON.parse(raw);
+            var input = document.getElementById('loginEmail');
+            if (typeof email === 'string' && input && !input.value) input.value = email;
+        } catch (e) { /* ignore */ }
+    })();
+
+    // === แปลง error จาก Supabase Auth เป็นข้อความภาษาไทย ===
+    // action: 'login' หรือ 'signup' — err มาจาก Auth.login()/Auth.signup() (มี status และ code)
+    function authErrorMessage(err, action) {
+        var msg = (err && err.message) || '';
+        var code = String((err && err.code) || '');
+        var status = err && err.status;
+        // fetch() ที่ต่อเครือข่ายไม่ได้จะ reject ด้วย TypeError (เช่น "Failed to fetch")
+        if (!status && err && err.name === 'TypeError') {
+            return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
         }
-    };
-
-    window.handleForgot = function(e) {
-        e.preventDefault();
-        hideError('forgotError');
-        document.getElementById('forgotSuccess').classList.add('hidden');
-        var email = document.getElementById('forgotEmail').value.trim();
-        if (!email) { showError('forgotError', 'กรุณากรอกอีเมล'); return; }
-        setLoading('forgotBtn', true, 'กำลังส่ง...');
-        Auth.requestPasswordReset(email)
-        .then(function() {
-            // ตอบแบบเดียวกันเสมอ ไม่บอกว่าอีเมลนี้มีบัญชีหรือไม่
-            var ok = document.getElementById('forgotSuccess');
-            ok.textContent = 'ถ้าอีเมลนี้มีบัญชีอยู่ในระบบ เราได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว กรุณาตรวจสอบกล่องจดหมาย (รวมถึง Spam)';
-            ok.classList.remove('hidden');
-            setLoading('forgotBtn', false, 'ส่งลิงก์อีกครั้ง');
-        })
-        .catch(function(err) {
-            var msg = 'ส่งลิงก์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
-            if (err.status === 429 || /rate limit|security purposes/i.test(err.message || '')) {
-                msg = 'ขอลิงก์บ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่';
-            } else if (err.code === 'email_address_not_authorized' || /not authorized/i.test(err.message || '')) {
-                // SMTP เริ่มต้นของ Supabase ส่งได้เฉพาะอีเมลสมาชิกทีมโปรเจกต์ จนกว่าจะตั้ง Custom SMTP
-                msg = 'ระบบยังส่งอีเมลถึงที่อยู่นี้ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ';
-            } else if (err.status === 400 && /email/i.test(err.message || '')) {
-                msg = 'รูปแบบอีเมลไม่ถูกต้อง';
-            }
-            showError('forgotError', msg);
-            setLoading('forgotBtn', false, 'ส่งลิงก์ตั้งรหัสผ่านใหม่');
-        });
-    };
+        // ส่งอีเมลยืนยันไม่ได้เพราะเกินโควตา: แบบมีตัวเลขวินาที = ขอซ้ำเร็วเกินไป,
+        // แบบไม่มี ("email rate limit exceeded") = โควตาอีเมลรายชั่วโมงของทั้งโปรเจกต์เต็ม
+        if (code === 'over_email_send_rate_limit' || /email rate limit|security purposes/i.test(msg)) {
+            var wait = /(\d+)\s*second/i.exec(msg);
+            if (wait) return 'กรุณารอ ' + wait[1] + ' วินาทีแล้วลองใหม่';
+            return action === 'signup'
+                ? 'ขณะนี้ระบบส่งอีเมลยืนยันการสมัครครบจำนวนที่กำหนดต่อชั่วโมงแล้ว กรุณาลองสมัครใหม่ภายหลัง (ประมาณ 1 ชั่วโมง)'
+                : 'ขณะนี้ระบบส่งอีเมลครบจำนวนที่กำหนดต่อชั่วโมงแล้ว กรุณาลองใหม่ภายหลัง';
+        }
+        if (status === 429 || code === 'over_request_rate_limit') {
+            return 'มีการลองหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่';
+        }
+        if (code === 'invalid_credentials' || /invalid login credentials|invalid_grant/i.test(msg)) {
+            return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+        }
+        if (code === 'email_not_confirmed' || /email not confirmed/i.test(msg)) {
+            return 'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ (ตรวจสอบใน Inbox/Spam)';
+        }
+        if (code === 'user_already_exists' || code === 'email_exists' || /already registered|already been registered/i.test(msg)) {
+            return 'อีเมลนี้สมัครสมาชิกแล้ว กรุณาเข้าสู่ระบบ หรือกด "ลืมรหัสผ่าน?"';
+        }
+        if (code === 'weak_password' || /password should|password is known|weak/i.test(msg)) {
+            return 'รหัสผ่านไม่ปลอดภัยพอ กรุณาตั้งให้ยาวขึ้นหรือผสมตัวอักษรและตัวเลข';
+        }
+        if (code === 'email_address_not_authorized' || /not authorized/i.test(msg)) {
+            return 'ระบบยังส่งอีเมลถึงที่อยู่นี้ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ';
+        }
+        if (code === 'email_address_invalid' || /invalid format|unable to validate email/i.test(msg)) {
+            return 'รูปแบบอีเมลไม่ถูกต้อง';
+        }
+        if (code === 'signup_disabled' || /signups not allowed/i.test(msg)) {
+            return 'ระบบปิดรับสมัครสมาชิกชั่วคราว';
+        }
+        if (/Database error saving new user/i.test(msg)) {
+            return 'เกิดข้อผิดพลาดที่ฐานข้อมูล (Database error saving new user) กรุณาตรวจสอบ Trigger ใน Supabase';
+        }
+        if (status >= 500) return 'ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง';
+        return 'เกิดข้อผิดพลาด: ' + (msg || 'กรุณาลองใหม่อีกครั้ง');
+    }
 
     // === Helpers ===
     function showError(id, msg) {
@@ -123,7 +153,7 @@
             window.location.href = 'index.html';
         }).catch(function(err) {
             console.error('Login error:', err);
-            showError('loginError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
+            showError('loginError', authErrorMessage(err, 'login'));
             setLoading('loginBtn', false, 'เข้าสู่ระบบ');
         });
     };
@@ -211,7 +241,7 @@
         })
         .catch(function(err) {
             console.error('Signup error:', err);
-            showError('signupError', 'เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
+            showError('signupError', authErrorMessage(err, 'signup'));
             setLoading('signupBtn', false, 'สมัครสมาชิก');
         });
     };

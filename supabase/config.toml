@@ -247,6 +247,12 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# รหัส OTP สำหรับตั้งรหัสผ่านใหม่ (reset-password.html) — ใช้กับ Supabase ในเครื่อง
+# โปรเจกต์บน supabase.com ต้องวาง template นี้เองที่ Dashboard → Authentication → Emails → Reset Password
+[auth.email.template.recovery]
+subject = "รหัส OTP สำหรับตั้งรหัสผ่านใหม่ PetCostTrack"
+content_path = "./supabase/templates/reset_password.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

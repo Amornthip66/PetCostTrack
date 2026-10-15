@@ -109,7 +109,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 - **คำเชิญเป็นผู้ร่วมดูแล** (Pet Invitations) โชว์บนหน้านี้พร้อมชื่อผู้เชิญ ให้ผู้ถูกเชิญตอบรับ/ปฏิเสธก่อนถึงได้สิทธิ์จริง (แสดงเฉพาะคำเชิญที่ยังไม่หมดอายุ)
 
 ### 👨‍👩‍👧 โปรไฟล์และครอบครัว (Profile & Family)
-- แก้ไขข้อมูลส่วนตัว, เปลี่ยนรหัสผ่านผ่านอีเมล
+- แก้ไขข้อมูลส่วนตัว, เปลี่ยนรหัสผ่านโดยยืนยันตัวตนด้วยรหัส OTP ทางอีเมล
 - **เชิญสมาชิกครอบครัวเป็นผู้ร่วมดูแลผ่านอีเมล** (เฉพาะ Owner ของสัตว์เลี้ยงตัวนั้น) และแสดงรายชื่อสมาชิกที่มีสิทธิ์เข้าถึงสัตว์เลี้ยงร่วมกัน
 - ผู้ร่วมดูแลสูงสุด **3 คน** ต่อสัตว์เลี้ยง 1 ตัว (นับคำเชิญที่รอตอบรับด้วย) และคำเชิญ**หมดอายุใน 7 วัน** คำเชิญที่หมดอายุถูกลบทุกคืน
 - ถอดสิทธิ์ผู้ร่วมดูแลแล้ว รายจ่ายที่เขาเคยบันทึกยังอยู่พร้อมชื่อผู้บันทึกเดิม (BR-06)
@@ -117,7 +117,7 @@ Web Application สำหรับบันทึก จัดหมวดหม
 
 ### 🔐 ระบบสมาชิก (Authentication)
 - สมัครสมาชิก / เข้าสู่ระบบ / ออกจากระบบ ผ่าน Supabase Auth (Email + Password)
-- **ลืมรหัสผ่าน**: ขอลิงก์จากหน้าเข้าสู่ระบบ (หรือหน้าโปรไฟล์) แล้วตั้งรหัสผ่านใหม่ที่หน้า `reset-password.html`
+- **ลืมรหัสผ่าน / เปลี่ยนรหัสผ่านด้วยรหัส OTP**: กด "ลืมรหัสผ่าน?" ที่หน้าเข้าสู่ระบบ (หรือ "เปลี่ยนรหัสผ่าน" ที่หน้าโปรไฟล์) → ระบบส่งรหัส OTP ไปที่อีเมล → กรอกรหัสพร้อมรหัสผ่านใหม่ที่หน้า `reset-password.html` (ไม่ต้องกดลิงก์ในอีเมล จึงไม่มีปัญหาลิงก์หมดอายุ/ถูกใช้ไปแล้ว)
 - ผูกบัญชีผู้ใช้ใหม่เข้ากับข้อมูลตัวอย่าง (seed data) อัตโนมัติเมื่ออีเมลตรงกัน
 - ป้องกันหน้าทุกหน้าไม่ให้เข้าถึงได้หากยังไม่ได้เข้าสู่ระบบ
 
@@ -201,7 +201,7 @@ PetCostTrack/
 ├── budgets.html    — หน้างบประมาณ
 ├── reminders.html  — หน้าการแจ้งเตือน
 ├── profile.html    — หน้าโปรไฟล์ผู้ใช้
-├── reset-password.html — หน้าตั้งรหัสผ่านใหม่ (ลิงก์จากอีเมลลืมรหัสผ่าน)
+├── reset-password.html — หน้าตั้งรหัสผ่านใหม่ด้วยรหัส OTP จากอีเมล
 ├── style.css       — สไตล์ที่ใช้ร่วมกันทุกหน้า (dropdown, ปุ่ม ฯลฯ)
 │
 ├── js/
@@ -218,13 +218,14 @@ PetCostTrack/
 │   ├── notifications.js — toast แจ้งเตือนรายการใกล้ครบกำหนดบนแดชบอร์ด
 │   ├── expense-allocation.js — กฎการแบ่งรายจ่ายให้สัตว์เลี้ยงหลายตัว (ใช้ร่วมกัน 2 หน้า)
 │   ├── profile.js      — Logic หน้าโปรไฟล์
-│   ├── login.js        — Logic หน้าเข้าสู่ระบบ/สมัครสมาชิก/ลืมรหัสผ่าน
-│   └── reset-password.js — Logic หน้าตั้งรหัสผ่านใหม่
+│   ├── login.js        — Logic หน้าเข้าสู่ระบบ/สมัครสมาชิก
+│   └── reset-password.js — Logic หน้าตั้งรหัสผ่านใหม่ (ขอรหัส OTP → ยืนยันรหัส → ตั้งรหัสผ่าน)
 │
 ├── supabase/
 │   ├── config.toml   — การตั้งค่าโปรเจกต์ Supabase (Supabase CLI)
 │   ├── migrations/   — SQL Migration เรียงตามลำดับเวลา (สร้างตาราง, RLS, Trigger, Function, Procedure, pg_cron)
-│   └── functions/send-reminder-emails/ — Edge Function ส่งอีเมลแจ้งเตือน
+│   ├── functions/send-reminder-emails/ — Edge Function ส่งอีเมลแจ้งเตือน
+│   └── templates/reset_password.html — template อีเมลรหัส OTP สำหรับตั้งรหัสผ่านใหม่
 │
 ├── vercel.json     — การตั้งค่า deploy บน Vercel (clean URL, security headers)
 └── .env.example    — ตัวอย่างตัวแปรสภาพแวดล้อม
@@ -241,7 +242,7 @@ PetCostTrack/
 2. สร้าง Storage bucket ชื่อ `receipts` (private) ใน Dashboard → Storage
 3. รัน migration ทั้งหมดตามลำดับ: `supabase link --project-ref <ref>` แล้ว `supabase db push` (หรือเปิด **SQL Editor** แล้วรันไฟล์ในโฟลเดอร์ `supabase/migrations/` เรียงตามชื่อไฟล์) เพื่อสร้างตาราง, ข้อมูลตัวอย่าง (seed data), RLS Policies, Trigger, Function, Procedure และ bucket `pet-photos`
    - ก่อนไฟล์ `20261013100300_schedule_daily_jobs.sql` ต้องสร้าง Vault secret 2 ค่าตามคำอธิบายในหัวไฟล์นั้น
-4. Authentication → URL Configuration: ตั้ง **Site URL** เป็นโดเมนของเว็บ และเพิ่ม `https://<โดเมน>/reset-password.html` ใน **Redirect URLs** (ใช้กับลิงก์ลืมรหัสผ่าน)
+4. Authentication → Emails → Templates → **Reset Password**: วางเนื้อหาจาก `supabase/templates/reset_password.html` (อีเมลจะมีรหัส OTP `{{ .Token }}` แทนลิงก์) และตั้ง **Site URL** เป็นโดเมนของเว็บใน Authentication → URL Configuration
 5. Deploy Edge Function แจ้งเตือนทางอีเมลตาม `supabase/functions/send-reminder-emails/README.md`
 
 ### 2. ตั้งค่าการเชื่อมต่อ

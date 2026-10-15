@@ -191,18 +191,17 @@ var Profile = (function() {
         .catch(function(err) { alert('ไม่สามารถกู้คืนได้: ' + (err.message || err)); });
     }
 
+    // เปลี่ยนรหัสผ่าน: ไปหน้า reset-password.html แล้วยืนยันตัวตนด้วยรหัส OTP ทางอีเมล
+    // (เติมอีเมลของบัญชีนี้ให้ผ่าน sessionStorage) — ตั้งสำเร็จแล้วต้องเข้าสู่ระบบใหม่ด้วยรหัสใหม่
     function changePassword() {
         var session = Auth.getSession();
         if (!session || !session.access_token) return;
-        var email = Auth.getUser().email;
-        // ส่งอีเมลลิงก์ตั้งรหัสผ่านใหม่ ลิงก์จะพาไปหน้า reset-password.html
-        Auth.requestPasswordReset(email).then(function() {
-            alert('ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ' + email + ' แล้ว');
-        }).catch(function(err) {
-            if (err.status === 429) alert('ขอลิงก์บ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
-            else if (err.code === 'email_address_not_authorized' || /not authorized/i.test(err.message || '')) alert('ระบบยังส่งอีเมลถึงที่อยู่นี้ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ');
-            else alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
-        });
+        var user = Auth.getUser();
+        var email = (user && user.email) || (session.user && session.user.email) || '';
+        try {
+            if (email) sessionStorage.setItem('pct_reset_email', JSON.stringify(email));
+        } catch (e) { /* ignore */ }
+        window.location.href = 'reset-password.html';
     }
 
     return {

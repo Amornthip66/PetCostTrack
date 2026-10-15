@@ -130,10 +130,8 @@ var Auth = (function() {
             body: JSON.stringify(body)
         }).then(function(r) {
             return safeJson(r).then(function(data) {
-                if (!r.ok) {
-                    var msg = (data && (data.msg || data.message || data.error_description)) || 'Signup failed (' + r.status + ')';
-                    throw new Error(msg);
-                }
+                // แนบ status และ error_code ไปด้วย ให้หน้า Login แปลงเป็นข้อความภาษาไทยได้ถูกกรณี
+                if (!r.ok) throw authError(r, data, 'Signup failed');
                 return data;
             });
         });
@@ -146,10 +144,7 @@ var Auth = (function() {
             body: JSON.stringify({ email: email, password: password })
         }).then(function(r) {
             return safeJson(r).then(function(data) {
-                if (!r.ok) {
-                    var msg = (data && (data.msg || data.message || data.error_description)) || 'Login failed (' + r.status + ')';
-                    throw new Error(msg);
-                }
+                if (!r.ok) throw authError(r, data, 'Login failed');
                 return data;
             });
         });
@@ -271,15 +266,29 @@ var Auth = (function() {
         });
     }
 
-    // === Password reset (F-07) ===
-    // หน้าที่ลิงก์ในอีเมลจะพากลับมา ต้องเพิ่ม URL นี้ใน Supabase → Authentication →
-    // URL Configuration → Redirect URLs (ถ้าไม่ได้เพิ่ม Supabase จะพาไป Site URL แทน
-    // ซึ่ง _recoveryRedirect ด้านบนจะส่งต่อมาที่หน้านี้ให้เอง)
+    // === Password reset ด้วยรหัส OTP (F-07) ===
+    // ขั้นที่ 1  requestPasswordReset(): POST /recover → Supabase ส่งอีเมล template "Reset Password"
+    //           ซึ่งต้องมี {{ .Token }} (รหัส OTP ตัวเลข 6–10 หลัก) ให้ผู้ใช้นำมากรอกในหน้า reset-password.html
+    // ขั้นที่ 2  verifyRecoveryOtp(): POST /verify {type:'recovery', email, token} → ได้ session ชั่วคราว
+    // ขั้นที่ 3  updatePassword(): PUT /user {password} ด้วย access token จากขั้นที่ 2
+    // ไม่ต้องพึ่งลิงก์ในอีเมล จึงไม่มีปัญหาลิงก์ถูกใช้ไปแล้ว/หมดอายุจากการกดซ้ำหรือจากระบบสแกนลิงก์
+    // ของผู้ให้บริการอีเมล และไม่ต้องตั้ง Redirect URLs
+    //
+    // redirect_to ยังส่งไปด้วย เผื่อ template ยังเป็นแบบลิงก์ ลิงก์จะพากลับมาหน้าเดียวกัน
+    // (_recoveryRedirect ด้านบนส่งต่อให้ถ้า Supabase พาไป Site URL แทน)
     function resetPasswordUrl() {
         return new URL('reset-password.html', window.location.href).href;
     }
 
-    // ส่งอีเมลลิงก์ตั้งรหัสผ่านใหม่ — Supabase ตอบสำเร็จเหมือนกันทุกกรณี
+    // แปลงคำตอบที่ไม่สำเร็จจาก Supabase Auth เป็น Error ที่มี status และ code (error_code)
+    function authError(r, data, fallback) {
+        var err = new Error((data && (data.msg || data.message || data.error_description)) || (fallback + ' (' + r.status + ')'));
+        err.status = r.status;
+        err.code = data && (data.error_code || data.code);
+        return err;
+    }
+
+    // ส่งรหัส OTP ไปที่อีเมล — Supabase ตอบสำเร็จเหมือนกันทุกกรณี
     // ไม่ว่าอีเมลนั้นมีบัญชีหรือไม่ (กันการเดาอีเมลสมาชิก)
     function requestPasswordReset(email) {
         return fetch(CONFIG.AUTH + '/recover?redirect_to=' + encodeURIComponent(resetPasswordUrl()), {
@@ -288,18 +297,29 @@ var Auth = (function() {
             body: JSON.stringify({ email: email })
         }).then(function(r) {
             return safeJson(r).then(function(data) {
-                if (!r.ok) {
-                    var err = new Error((data && (data.msg || data.message || data.error_description)) || ('recover failed (' + r.status + ')'));
-                    err.status = r.status;
-                    err.code = data && (data.error_code || data.code);
-                    throw err;
-                }
+                if (!r.ok) throw authError(r, data, 'recover failed');
                 return data;
             });
         });
     }
 
-    // ตั้งรหัสผ่านใหม่ด้วย access token จากลิงก์ในอีเมล (type=recovery)
+    // ยืนยันรหัส OTP จากอีเมล คืน session ({ access_token, refresh_token, user, ... })
+    // รหัสใช้ได้ครั้งเดียว: ยืนยันสำเร็จแล้วรหัสเดิมจะใช้ซ้ำไม่ได้
+    function verifyRecoveryOtp(email, token) {
+        return fetch(CONFIG.AUTH + '/verify', {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'recovery', email: email, token: token })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) throw authError(r, data, 'verify failed');
+                if (!data || !data.access_token) throw authError(r, data, 'verify returned no session');
+                return data;
+            });
+        });
+    }
+
+    // ตั้งรหัสผ่านใหม่ด้วย access token จากการยืนยันรหัส OTP (หรือจากลิงก์ type=recovery)
     function updatePassword(accessToken, newPassword) {
         return fetch(CONFIG.AUTH + '/user', {
             method: 'PUT',
@@ -307,15 +327,19 @@ var Auth = (function() {
             body: JSON.stringify({ password: newPassword })
         }).then(function(r) {
             return safeJson(r).then(function(data) {
-                if (!r.ok) {
-                    var err = new Error((data && (data.msg || data.message || data.error_description)) || ('update password failed (' + r.status + ')'));
-                    err.status = r.status;
-                    err.code = data && (data.error_code || data.code);
-                    throw err;
-                }
+                if (!r.ok) throw authError(r, data, 'update password failed');
                 return data;
             });
         });
+    }
+
+    // ยกเลิก session ชั่วคราวที่ได้จากการยืนยันรหัส (ไม่กระทบอุปกรณ์อื่น)
+    // ทำแบบไม่รอผล: ถ้าเรียกไม่สำเร็จ session นี้ก็หมดอายุเองตามเวลาของ access token
+    function revokeSession(accessToken) {
+        return fetch(CONFIG.AUTH + '/logout?scope=local', {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Authorization': 'Bearer ' + accessToken }
+        }).then(function() {}, function() {});
     }
 
     // === Redirect ===
@@ -372,6 +396,8 @@ var Auth = (function() {
         redirectIfLoggedIn: redirectIfLoggedIn,
         autoLinkUser: autoLinkUser,
         requestPasswordReset: requestPasswordReset,
-        updatePassword: updatePassword
+        verifyRecoveryOtp: verifyRecoveryOtp,
+        updatePassword: updatePassword,
+        revokeSession: revokeSession
     };
 })();

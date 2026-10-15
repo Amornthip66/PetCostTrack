@@ -1,78 +1,81 @@
 # send-reminder-emails
 
-Edge Function สำหรับส่งอีเมลแจ้งเตือนเมื่อรายการแจ้งเตือน (reminders) ใกล้ถึงกำหนด
-(ภายใน 7 วัน) — เป็นส่วนหนึ่งของข้อ 3.4 (ช่องทางแจ้งเตือนภายนอกแอป)
+Edge Function ส่งอีเมลแจ้งเตือนเมื่อรายการแจ้งเตือน (reminders) ถึงช่วงแจ้งเตือน
+ตามจำนวนวันล่วงหน้าที่ผู้ใช้ตั้งไว้ในแต่ละรายการ (`reminders.notify_days_before`
+ค่าเริ่มต้น 7 วัน) — Acceptance Criteria F-05 ข้อ II
 
-> **สถานะปัจจุบัน:** เป็นโครงโค้ด (scaffold) ที่พร้อม deploy แต่ **ยังไม่ได้ส่งอีเมลจริง**
-> เพราะยังไม่มี API key ของบริการส่งอีเมล ต้องตั้งค่าตามขั้นตอนด้านล่างก่อน
+pg_cron เรียกฟังก์ชันนี้ทุกวัน 07:00 น. เวลาไทย ผ่าน pg_net
+(migration `20261013100300_schedule_daily_jobs.sql`)
 
-## ทำไมไม่ใช้ LINE Notify ตามที่ proposal แนะนำ
+## ทำไมใช้อีเมลแทน LINE Notify ตามที่ proposal แนะนำ
 
 LINE Notify ถูกปิดให้บริการถาวรตั้งแต่ 31 มีนาคม 2025 (ประกาศทางการของ LINE
-Developers: https://developers.line.biz/en/news/2025/04/01/line-notify/) ปัจจุบัน
-ไม่สามารถขอ token หรือเรียก API ของ LINE Notify ได้อีกต่อไป ทางเลือกที่เหลือของ
-LINE คือ LINE Messaging API ซึ่งต้องมี LINE Official Account + webhook + ระบบ
-ผูกบัญชีผู้ใช้แต่ละคนกับ LINE user ID ผ่าน LINE Login (OAuth) — ซับซ้อนกว่ามาก
-และเป็นงานคนละขนาดกับ LINE Notify เดิม จึงเลือกทำอีเมลเป็นช่องทางหลักแทนในรอบนี้
+Developers: https://developers.line.biz/en/news/2025/04/01/line-notify/) ทางเลือกที่เหลือ
+คือ LINE Messaging API ซึ่งต้องมี LINE Official Account + webhook + ผูกบัญชีผู้ใช้กับ
+LINE user ID ผ่าน LINE Login จึงเลือกอีเมลเป็นช่องทางนอกแอป ส่วนในแอปมี toast
+(`js/notifications.js`)
 
-## ขั้นตอนติดตั้งใช้งานจริง
+## ขั้นตอนติดตั้ง (ทำครั้งเดียว)
 
-1. **สมัครบริการส่งอีเมล** — ตัวอย่างในโค้ดใช้ [Resend](https://resend.com) (มี
-   free tier, ตั้งค่าง่าย) แต่จะสลับไปใช้ SendGrid/Postmark/AWS SES หรืออื่นๆ ก็ได้
-   โดยแก้ส่วน `sendEmail()` ใน `index.ts` ให้เรียก API ของผู้ให้บริการนั้นแทน
+1. **สมัคร [Resend](https://resend.com)** แล้วสร้าง API key (free tier พอสำหรับโปรเจกต์นี้)
+   ถ้ายังไม่ได้ยืนยันโดเมน ให้ใช้ผู้ส่ง `onboarding@resend.dev` ซึ่งส่งได้เฉพาะอีเมลของ
+   เจ้าของบัญชี Resend — ถ้าจะส่งถึงสมาชิกทุกคนต้องยืนยันโดเมนของตัวเองก่อน
 
-2. **Deploy ฟังก์ชันนี้:**
+2. **ตั้ง secret ของฟังก์ชัน** (`CRON_SECRET` เป็นสตริงสุ่มยาวๆ ที่คิดขึ้นเอง):
    ```bash
-   supabase functions deploy send-reminder-emails
+   supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxx
+   supabase secrets set CRON_SECRET=<สตริงสุ่ม>
+   supabase secrets set APP_URL=https://<โดเมนของเว็บ>
+   supabase secrets set REMINDER_EMAIL_FROM="PetCostTrack <notify@yourdomain.com>"   # ไม่บังคับ
+   ```
+   (`SUPABASE_URL` และ `SUPABASE_SERVICE_ROLE_KEY` Supabase ตั้งให้อัตโนมัติ)
+
+3. **Deploy** (ปิดการตรวจ JWT เพราะฟังก์ชันตรวจ `x-cron-secret` เอง):
+   ```bash
+   supabase functions deploy send-reminder-emails --no-verify-jwt
    ```
 
-3. **ตั้งค่า secret:**
-   ```bash
-   supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxxxxxx
-   supabase secrets set REMINDER_EMAIL_FROM="PetCostTrack <notify@yourdomain.com>"
-   ```
-   (`SUPABASE_URL` และ `SUPABASE_SERVICE_ROLE_KEY` Supabase ตั้งให้อัตโนมัติอยู่แล้ว
-   ไม่ต้องตั้งเอง)
-
-4. **แก้ลิงก์ในอีเมล** — ใน `index.ts` ค้นหา `YOUR_APP_DOMAIN` แล้วแทนที่ด้วยโดเมน
-   จริงที่ deploy แอปนี้ไว้
-
-5. **ตั้งให้รันตามตารางเวลา** (เช่น ทุกวันตอนเช้า) เลือกวิธีใดวิธีหนึ่ง:
-
-   **วิธี A — Supabase Dashboard (ง่ายสุด):**
-   ไปที่ Edge Functions → เลือกฟังก์ชันนี้ → แท็บ "Cron" → ตั้ง schedule (เช่น
-   `0 8 * * *` = ทุกวัน 8 โมงเช้า UTC)
-
-   **วิธี B — pg_cron + pg_net (ถ้าต้องการควบคุมจาก SQL):**
+4. **เก็บค่าที่ pg_cron ใช้เรียกฟังก์ชันไว้ใน Vault** (SQL Editor ครั้งเดียว ไม่เก็บใน repo):
    ```sql
-   select cron.schedule(
-     'send-reminder-emails-daily',
-     '0 8 * * *',
-     $$
-     select net.http_post(
-       url := 'https://<project-ref>.supabase.co/functions/v1/send-reminder-emails',
-       headers := jsonb_build_object(
-         'Authorization', 'Bearer ' || '<SERVICE_ROLE_KEY หรือ anon key ที่ตั้ง JWT verify ให้ผ่าน>',
-         'Content-Type', 'application/json'
-       )
-     );
-     $$
-   );
+   select vault.create_secret('https://<project-ref>.supabase.co', 'petcosttrack_project_url');
+   select vault.create_secret('<สตริงสุ่มเดียวกับ CRON_SECRET>', 'petcosttrack_cron_secret');
    ```
-   ต้องเปิด extension `pg_cron` และ `pg_net` ในโปรเจกต์ก่อน (Database → Extensions)
 
-## ทดสอบด้วยตัวเอง (ก่อนตั้ง cron)
+5. **ตั้งเวลา** ด้วย migration `20261013100300_schedule_daily_jobs.sql`
+   (`supabase db push` หรือรันไฟล์นั้นใน SQL Editor)
+
+## ทดสอบด้วยตัวเอง
 
 ```bash
-supabase functions invoke send-reminder-emails
+curl -X POST "https://<project-ref>.supabase.co/functions/v1/send-reminder-emails" \
+     -H "x-cron-secret: <สตริงสุ่ม>"
 ```
-ถ้า `RESEND_API_KEY` ยังไม่ได้ตั้งค่า ฟังก์ชันจะตอบกลับ HTTP 501 พร้อมข้อความแจ้ง
-ให้ตั้งค่าก่อน (ไม่ error แบบเงียบๆ)
+ผลลัพธ์เป็น JSON เช่น `{"today":"2026-10-14","checked":4,"due":2,"sent":3,"errors":[]}`
+- ไม่ส่ง `x-cron-secret` หรือส่งผิด → HTTP 401
+- ยังไม่ได้ตั้ง `RESEND_API_KEY` → HTTP 501 พร้อมข้อความแจ้ง (ไม่ error แบบเงียบ)
 
-## หมายเหตุด้านความถูกต้อง
+ดูผลการเรียกจาก pg_cron ได้ที่:
+```sql
+select * from cron.job_run_details order by start_time desc limit 10;
+select status_code, content from net._http_response order by created desc limit 5;
+```
 
-- ฟังก์ชันนี้ใช้ Service Role Key อ่าน/เขียนข้ามผู้ใช้ทุกคน (ไม่ผ่าน RLS) ตามรูปแบบ
-  มาตรฐานของงานเบื้องหลัง — **ห้าม** เผยแพร่ Service Role Key นี้ไปฝั่ง client เด็ดขาด
-- คอลัมน์ `reminders.last_notified_at` (เพิ่มโดย migration
-  `20260912000000_reminder_email_notifications.sql`) กันไม่ให้ส่งอีเมลซ้ำทุกครั้งที่
-  cron รันสำหรับ reminder เดียวกันที่เพิ่งแจ้งไปแล้วในรอบล่าสุด
+## พฤติกรรม
+
+- เลือกรายการที่ยังไม่เสร็จ และ `วันครบกำหนด <= วันนี้ + notify_days_before`
+  รายการที่เลยกำหนดแล้วจะแจ้งต่อวันละครั้งจนกว่าจะกด "เสร็จแล้ว" (หัวข้ออีเมลขึ้นต้นด้วย "เลยกำหนด")
+- ส่งถึงทุกคนที่มีสิทธิ์ต่อสัตว์เลี้ยงตัวนั้น (Owner + Co-caretaker จาก `pet_access`)
+- `last_notified_at` กันส่งซ้ำในวันเดียวกัน (นับวันตามเวลาไทย) และจะบันทึกก็ต่อเมื่อส่งถึง
+  อย่างน้อย 1 คน รอบหน้าจึงลองใหม่ได้ถ้าส่งไม่สำเร็จ
+- ถ้าฐานข้อมูลยังไม่มีคอลัมน์ `notify_days_before` ใช้ 7 วันทุกรายการ
+
+## หมายเหตุด้านความปลอดภัย
+
+- ฟังก์ชันใช้ Service Role Key อ่าน/เขียนข้ามผู้ใช้ (ไม่ผ่าน RLS) ตามรูปแบบงานเบื้องหลัง —
+  **ห้าม** เผยแพร่ Service Role Key ไปฝั่ง client
+- ชื่อสัตว์เลี้ยง/หมวดหมู่/ผู้ใช้ถูก escape ก่อนใส่ใน HTML ของอีเมล
+
+## ทดสอบอัตโนมัติ
+
+ฟังก์ชันหลักแยกเป็น `handleRequest(req, env, deps)` จึงทดสอบได้โดยไม่ต้องต่อ Supabase/Resend จริง
+(ตั้ง `PETCOST_TEST=1` เพื่อไม่ให้ไฟล์เรียก `Deno.serve` ตอน import)

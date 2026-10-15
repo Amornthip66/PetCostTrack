@@ -7,14 +7,29 @@ var Auth = (function() {
     var _user = null;
     var _refreshTimer = null;
 
-    // ลิงก์รีเซ็ตรหัสผ่านในอีเมลพากลับมาพร้อม #access_token=...&type=recovery
-    // ถ้า Supabase ส่งกลับมาที่ Site URL (เช่น index.html) แทน reset-password.html
-    // (กรณียังไม่ได้เพิ่ม URL ใน Redirect URLs) ให้ส่งต่อไปหน้าตั้งรหัสผ่านใหม่พร้อม hash เดิม
+    // ลิงก์จากอีเมลที่ Supabase พากลับมาที่ Site URL (เช่น index.html) แทนหน้าที่ตั้งใจไว้
+    // (กรณียังไม่ได้เพิ่ม URL ใน Redirect URLs) ให้ส่งต่อไปหน้าที่ถูกต้องพร้อม query/hash เดิม
     // และไม่ให้ requireAuth()/redirectIfLoggedIn() เปลี่ยนหน้าซ้อน
-    var _recoveryRedirect = (function() {
+    // - #access_token=...&type=recovery      → reset-password.html (ลิงก์ตั้งรหัสผ่านแบบเดิม)
+    // - ?token_hash=...                       → confirm-email.html (ปุ่ม "ยืนยันอีเมล" ใน template ใหม่)
+    // - #access_token=...&type=signup|email   → confirm-email.html (ลิงก์ยืนยันอีเมลแบบเดิม)
+    // - #error_code=... (ลิงก์หมดอายุ/ใช้ไปแล้ว) → confirm-email.html (หน้า reset-password จัดการเองอยู่แล้ว)
+    var _authRedirect = (function() {
         var h = window.location.hash || '';
-        if (/(^|[#&])type=recovery(&|$)/.test(h) && !/reset-password(\.html)?$/.test(window.location.pathname)) {
+        var q = window.location.search || '';
+        var path = window.location.pathname;
+        var onReset = /reset-password(\.html)?$/.test(path);
+        if (/(^|[#&])type=recovery(&|$)/.test(h) && !onReset) {
             window.location.replace('reset-password.html' + h);
+            return true;
+        }
+        if (onReset || /confirm-email(\.html)?$/.test(path)) return false;
+        if (/[?&]token_hash=/.test(q)) {
+            window.location.replace('confirm-email.html' + q);
+            return true;
+        }
+        if (/(^|[#&])type=(signup|email)(&|$)/.test(h) || /(^|[#&])error_code=/.test(h)) {
+            window.location.replace('confirm-email.html' + h);
             return true;
         }
         return false;
@@ -119,12 +134,15 @@ var Auth = (function() {
     }
 
     // === Auth API ===
+    // redirect_to = หน้า confirm-email.html ของเว็บที่ผู้ใช้สมัคร: template "Confirm signup" ใช้ {{ .RedirectTo }}
+    // สร้างปุ่ม "ยืนยันอีเมล" ถ้า URL นี้ไม่อยู่ใน Redirect URLs ของ Supabase จะได้ Site URL แทน
+    // แล้ว _authRedirect ด้านบนส่งต่อมาหน้า confirm-email.html ให้เอง
     function signup(email, password, metadata) {
         var body = { email: email, password: password };
         if (metadata) {
             body.data = metadata;
         }
-        return fetch(CONFIG.AUTH + '/signup', {
+        return fetch(CONFIG.AUTH + '/signup?redirect_to=' + encodeURIComponent(confirmEmailUrl()), {
             method: 'POST',
             headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -275,9 +293,13 @@ var Auth = (function() {
     // ของผู้ให้บริการอีเมล และไม่ต้องตั้ง Redirect URLs
     //
     // redirect_to ยังส่งไปด้วย เผื่อ template ยังเป็นแบบลิงก์ ลิงก์จะพากลับมาหน้าเดียวกัน
-    // (_recoveryRedirect ด้านบนส่งต่อให้ถ้า Supabase พาไป Site URL แทน)
+    // (_authRedirect ด้านบนส่งต่อให้ถ้า Supabase พาไป Site URL แทน)
     function resetPasswordUrl() {
         return new URL('reset-password.html', window.location.href).href;
+    }
+
+    function confirmEmailUrl() {
+        return new URL('confirm-email.html', window.location.href).href;
     }
 
     // แปลงคำตอบที่ไม่สำเร็จจาก Supabase Auth เป็น Error ที่มี status และ code (error_code)
@@ -333,6 +355,49 @@ var Auth = (function() {
         });
     }
 
+    // === ยืนยันอีเมลหลังสมัครสมาชิก (F-07) ===
+    // ปุ่มในอีเมลพามาที่ confirm-email.html?token_hash=...&type=email แล้วหน้านั้นเรียก POST /verify เอง
+    // การเปิดลิงก์เฉยๆ (เช่น ระบบสแกนลิงก์ของผู้ให้บริการอีเมล) จึงไม่ทำให้ลิงก์ถูกใช้ไปก่อนผู้ใช้กด
+    // สำเร็จแล้วได้ session ({ access_token, refresh_token, user, ... }) — ลิงก์ใช้ได้ครั้งเดียว
+    function verifyEmailTokenHash(tokenHash, type) {
+        return fetch(CONFIG.AUTH + '/verify', {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: type || 'email', token_hash: tokenHash })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) throw authError(r, data, 'verify failed');
+                return data || {};
+            });
+        });
+    }
+
+    // ส่งอีเมลยืนยันการสมัครใหม่ (ลิงก์เดิมหมดอายุ/หาไม่เจอ) — Supabase ให้ขอซ้ำได้ทุก 60 วินาที
+    function resendSignupConfirmation(email) {
+        return fetch(CONFIG.AUTH + '/resend?redirect_to=' + encodeURIComponent(confirmEmailUrl()), {
+            method: 'POST',
+            headers: { 'apikey': CONFIG.SB_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'signup', email: email })
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok) throw authError(r, data, 'resend failed');
+                return data;
+            });
+        });
+    }
+
+    // อ่านข้อมูลผู้ใช้จาก access token (ใช้ตรวจ token จากลิงก์ยืนยันแบบเดิมก่อนบันทึกเป็น session)
+    function fetchUser(accessToken) {
+        return fetch(CONFIG.AUTH + '/user', {
+            headers: { 'apikey': CONFIG.SB_KEY, 'Authorization': 'Bearer ' + accessToken }
+        }).then(function(r) {
+            return safeJson(r).then(function(data) {
+                if (!r.ok || !data || !data.id) throw authError(r, data, 'get user failed');
+                return data;
+            });
+        });
+    }
+
     // ยกเลิก session ชั่วคราวที่ได้จากการยืนยันรหัส (ไม่กระทบอุปกรณ์อื่น)
     // ทำแบบไม่รอผล: ถ้าเรียกไม่สำเร็จ session นี้ก็หมดอายุเองตามเวลาของ access token
     function revokeSession(accessToken) {
@@ -344,7 +409,7 @@ var Auth = (function() {
 
     // === Redirect ===
     function requireAuth() {
-        if (_recoveryRedirect) return false;
+        if (_authRedirect) return false;
         if (!isLoggedIn()) {
             window.location.href = 'login.html';
             return false;
@@ -353,7 +418,7 @@ var Auth = (function() {
     }
 
     function redirectIfLoggedIn() {
-        if (_recoveryRedirect) return true;
+        if (_authRedirect) return true;
         if (isLoggedIn()) {
             window.location.href = 'index.html';
             return true;
@@ -398,6 +463,9 @@ var Auth = (function() {
         requestPasswordReset: requestPasswordReset,
         verifyRecoveryOtp: verifyRecoveryOtp,
         updatePassword: updatePassword,
-        revokeSession: revokeSession
+        revokeSession: revokeSession,
+        verifyEmailTokenHash: verifyEmailTokenHash,
+        resendSignupConfirmation: resendSignupConfirmation,
+        fetchUser: fetchUser
     };
 })();

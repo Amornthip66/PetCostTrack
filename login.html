@@ -53,6 +53,12 @@
                 <span>เข้าสู่ระบบ</span>
             </button>
             <p id="loginError" class="text-red-500 text-sm mt-2 text-center hidden"></p>
+            <!-- ยังไม่ได้ยืนยันอีเมล: ขออีเมลยืนยันฉบับใหม่ได้ (ลิงก์เดิมหมดอายุ/หาไม่เจอ) -->
+            <div id="resendConfirmBox" class="hidden mt-2 text-center">
+                <button type="button" id="resendConfirmBtn" onclick="resendConfirmation()"
+                    class="text-sm text-pet font-medium hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed">ส่งอีเมลยืนยันอีกครั้ง</button>
+                <p id="resendConfirmMsg" class="text-sm mt-1 hidden" role="status"></p>
+            </div>
         </form>
 
         <!-- Signup Form -->
@@ -93,7 +99,7 @@
     <!-- Scripts -->
     <script src="js/config.env.js?v=20260913"></script>
     <script src="js/api.js?v=20260913"></script>
-    <script src="js/auth.js?v=20261015b"></script>
-    <script src="js/login.js?v=20261015b"></script>
+    <script src="js/auth.js?v=20261015c"></script>
+    <script src="js/login.js?v=20261015c"></script>
 </body>
 </html>
